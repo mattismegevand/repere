@@ -1,0 +1,552 @@
+@import "tailwindcss";
+
+/**
+ * Theme System
+ *
+ * Colors and structure tokens are injected by JavaScript via applyTheme().
+ * These are fallback defaults (modern light theme).
+ */
+
+:root {
+  /* Color tokens - set by theme system */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f9fafb;
+  --color-bg-tertiary: #f3f4f6;
+  --color-text-primary: #111827;
+  --color-text-secondary: #4b5563;
+  --color-text-muted: #9ca3af;
+  --color-border: #e5e7eb;
+  --color-border-light: #f3f4f6;
+  --color-accent: #3b82f6;
+  --color-accent-hover: #2563eb;
+  --color-accent-bg: #eff6ff;
+  --color-error: #dc2626;
+  --color-error-bg: #fef2f2;
+  --color-success: #16a34a;
+  --color-success-bg: #f0fdf4;
+  --color-warning: #d97706;
+  --color-warning-bg: #fffbeb;
+
+  /* Chip color tokens */
+  --color-chip-blue-bg: rgb(59 130 246 / 0.1);
+  --color-chip-blue-bg-active: rgb(59 130 246 / 0.2);
+  --color-chip-blue-text: #2563eb;
+  --color-chip-blue-ring: rgb(59 130 246 / 0.5);
+  --color-chip-green-bg: rgb(34 197 94 / 0.1);
+  --color-chip-green-bg-active: rgb(34 197 94 / 0.2);
+  --color-chip-green-text: #16a34a;
+  --color-chip-green-ring: rgb(34 197 94 / 0.5);
+  --color-chip-purple-bg: rgb(168 85 247 / 0.1);
+  --color-chip-purple-bg-active: rgb(168 85 247 / 0.2);
+  --color-chip-purple-text: #9333ea;
+  --color-chip-purple-ring: rgb(168 85 247 / 0.5);
+  --color-chip-orange-bg: rgb(249 115 22 / 0.1);
+  --color-chip-orange-bg-active: rgb(249 115 22 / 0.2);
+  --color-chip-orange-text: #ea580c;
+  --color-chip-orange-ring: rgb(249 115 22 / 0.5);
+  --color-chip-cyan-bg: rgb(6 182 212 / 0.1);
+  --color-chip-cyan-bg-active: rgb(6 182 212 / 0.2);
+  --color-chip-cyan-text: #0891b2;
+  --color-chip-cyan-ring: rgb(6 182 212 / 0.5);
+  --color-chip-amber-bg: rgb(245 158 11 / 0.1);
+  --color-chip-amber-bg-active: rgb(245 158 11 / 0.2);
+  --color-chip-amber-text: #d97706;
+  --color-chip-amber-ring: rgb(245 158 11 / 0.5);
+  --color-chip-gray-bg: rgb(107 114 128 / 0.1);
+  --color-chip-gray-bg-active: rgb(107 114 128 / 0.2);
+  --color-chip-gray-text: #4b5563;
+  --color-chip-gray-ring: rgb(107 114 128 / 0.5);
+
+  /* Structure tokens - set by theme system */
+  --radius-none: 0;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+  --border-width: 1px;
+  --border-width-thick: 2px;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  --font-logo: "Space Grotesk", sans-serif;
+  --font-size: 14px;
+  --line-height: 1.5;
+  --text-transform: none;
+  --letter-spacing: normal;
+  --spacing-scale: 1;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+/* Base styles */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden; /* Prevent outer scroll - only inner content should scroll */
+}
+
+body {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  text-transform: var(--text-transform);
+  letter-spacing: var(--letter-spacing);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Monospace for code/data contexts */
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Logo font */
+.font-logo {
+  font-family: var(--font-logo);
+  letter-spacing: -0.01em;
+}
+
+/* UI text transform (for classic theme uppercase) */
+.ui-text {
+  text-transform: var(--text-transform);
+  letter-spacing: var(--letter-spacing);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* Virtual scroll container - hide native vertical scrollbar, keep horizontal */
+.virtual-scroll-container {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.virtual-scroll-container::-webkit-scrollbar {
+  width: 0;
+  height: 8px; /* Keep horizontal scrollbar */
+}
+
+/* Mini table scrollbar - more visible for dark mode */
+.mini-table-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-text-muted) transparent;
+}
+
+.mini-table-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.mini-table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mini-table-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-text-muted);
+  border-radius: 3px;
+}
+
+.mini-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-secondary);
+}
+
+.mini-table-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ========================================
+   Semantic UI Classes
+   ======================================== */
+
+/* Overlay (used by dialogs, loading) */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 0.5);
+  z-index: 50;
+}
+
+/* Dialog content */
+.dialog-content {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  padding: 1rem;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+}
+
+/* Popover/dropdown content */
+.popover-content {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 0.25rem;
+  z-index: 50;
+}
+
+/* Tooltip */
+.tooltip-content {
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  z-index: 50;
+}
+
+/* Menu item (context menus, dropdowns) */
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  cursor: default;
+  outline: none;
+  color: var(--color-text-primary);
+}
+
+.menu-item:hover,
+.menu-item:focus,
+.menu-item[data-highlighted] {
+  background: var(--color-bg-secondary);
+}
+
+/* Panel/card */
+.panel {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 0.75rem;
+}
+
+/* Classic structure overrides - Bloomberg terminal style */
+.structure-classic input,
+.structure-classic select,
+.structure-classic textarea {
+  padding: 1px 6px !important;
+  border: 1px solid var(--color-border) !important;
+  background: var(--color-bg-secondary) !important;
+}
+
+.structure-classic button {
+  padding: 1px 6px !important;
+}
+
+.structure-classic [class*="shadow"] {
+  box-shadow: none !important;
+}
+
+/* Aggressive padding - minimal vertical, reasonable horizontal */
+.structure-classic [class*="p-"]:not([class*="opacity"]):not([class*="top"]):not([class*="group"]) {
+  padding: 1px 6px !important;
+}
+
+.structure-classic [class*="px-"] {
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+}
+
+.structure-classic [class*="py-"] {
+  padding-top: 1px !important;
+  padding-bottom: 1px !important;
+}
+
+/* Compact vertical margins only - preserve horizontal and sticky positioning */
+.structure-classic [class*="mt-"]:not([class*="-mt"]):not([class*="auto"]):not(.sticky) {
+  margin-top: 1px !important;
+}
+
+.structure-classic [class*="mb-"]:not([class*="-mb"]):not([class*="auto"]):not(.sticky) {
+  margin-bottom: 1px !important;
+}
+
+/* Minimal vertical gaps, preserve horizontal */
+.structure-classic [class*="gap-"] {
+  row-gap: 2px !important;
+}
+
+/* Minimal vertical spacing only */
+.structure-classic [class*="space-y-"] > * + * {
+  margin-top: 1px !important;
+}
+
+/* Tables: visible grid lines */
+.structure-classic table,
+.structure-classic th,
+.structure-classic td {
+  border: 1px solid var(--color-border) !important;
+}
+
+.structure-classic th,
+.structure-classic td {
+  padding: 0 6px !important;
+}
+
+/* Textarea compact */
+.structure-classic textarea {
+  min-height: 24px !important;
+}
+
+/* Bloomberg-style borders on panels/containers */
+.structure-classic [class*="border"] {
+  border-color: var(--color-border) !important;
+}
+
+.structure-classic [class*="rounded"] {
+  border-radius: 0 !important;
+}
+
+/* Data values in normal case (not uppercase) - tables, inputs, code, etc. */
+.structure-classic .data-value,
+.structure-classic [data-value],
+.structure-classic td,
+.structure-classic th,
+.structure-classic input,
+.structure-classic textarea,
+.structure-classic code,
+.structure-classic pre,
+.structure-classic .font-mono,
+.structure-classic .tabular-nums,
+.structure-classic [class*="truncate"] {
+  text-transform: none !important;
+}
+
+/* Data values should always be normal case (not uppercase in classic) */
+.data-value {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* ========================================
+   Animations
+   ======================================== */
+
+/* Dot grid background pattern */
+.dot-grid-bg {
+  background-image: radial-gradient(circle, var(--color-border) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Animated gradient background */
+@keyframes gradient-shift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 8s ease infinite;
+}
+
+/* Fade animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.15s ease-out both;
+}
+
+.animate-fade-in-up {
+  opacity: 0;
+  animation: fade-in-up 0.3s ease-out both;
+}
+
+/* View transition animations */
+@keyframes view-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes view-exit {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.99);
+  }
+}
+
+.animate-view-enter {
+  animation: view-enter 0.15s ease-out both;
+}
+
+.animate-view-exit {
+  animation: view-exit 0.1s ease-out both;
+}
+
+/* Dialog/popover animations (for Radix components) */
+.dialog-content[data-state="open"],
+.popover-content[data-state="open"],
+.tooltip-content[data-state="open"] {
+  animation: fade-in 0.15s ease-out;
+}
+
+.dialog-content[data-state="closed"],
+.popover-content[data-state="closed"],
+.tooltip-content[data-state="closed"] {
+  animation: fade-out 0.1s ease-out;
+}
+
+/* Slide in from right animation (for sidebars) */
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.15s ease-out both;
+}
+
+/* Loading animation */
+@keyframes loading-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-loading-pulse {
+  animation: loading-pulse 1.5s ease-in-out infinite;
+}
+
+/* Staggered children (simplified) */
+.stagger-children > * {
+  opacity: 0;
+  animation: fade-in-up 0.3s ease-out forwards;
+}
+
+.stagger-children > *:nth-child(1) {
+  animation-delay: 0ms;
+}
+.stagger-children > *:nth-child(2) {
+  animation-delay: 40ms;
+}
+.stagger-children > *:nth-child(3) {
+  animation-delay: 80ms;
+}
+.stagger-children > *:nth-child(n + 4) {
+  animation-delay: 120ms;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .animate-gradient,
+  .animate-fade-in,
+  .animate-fade-in-up,
+  .animate-view-enter,
+  .animate-view-exit,
+  .animate-slide-in-right,
+  .stagger-children > *,
+  .dialog-content,
+  .popover-content,
+  .tooltip-content {
+    animation: none;
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ========================================
+   Touch Device Support
+   ======================================== */
+
+/* Show resize handles on touch devices (hover doesn't work) */
+@media (hover: none) and (pointer: coarse) {
+  .touch-resize-handle {
+    opacity: 0.4 !important;
+    width: 6px !important;
+  }
+}
+
+/* Smooth momentum scrolling on touch devices */
+.overflow-auto,
+.overflow-y-auto,
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}

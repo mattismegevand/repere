@@ -1,0 +1,5 @@
+# repere - In-browser data explorer
+User-agent: *
+Allow: /
+
+Sitemap: https://repere.ai/sitemap.xml

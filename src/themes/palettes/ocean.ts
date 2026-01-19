@@ -1,0 +1,61 @@
+import type { ColorPalette } from '../types'
+
+export const oceanPalette: ColorPalette = {
+  metadata: {
+    id: 'ocean',
+    name: 'Ocean',
+    description: 'Cool blues and teals',
+  },
+  colors: {
+    light: {
+      bgPrimary: '#ffffff',
+      bgSecondary: '#f0f9ff',
+      bgTertiary: '#e0f2fe',
+      textPrimary: '#0c4a6e',
+      textSecondary: '#0369a1',
+      textMuted: '#7dd3fc',
+      border: '#bae6fd',
+      borderLight: '#e0f2fe',
+      accent: '#0891b2',
+      accentHover: '#0e7490',
+      accentBg: '#cffafe',
+      error: '#dc2626',
+      errorBg: '#fef2f2',
+      success: '#059669',
+      successBg: '#d1fae5',
+      warning: '#d97706',
+      warningBg: '#fef3c7',
+    },
+    dark: {
+      bgPrimary: '#0c1929',
+      bgSecondary: '#0f2942',
+      bgTertiary: '#1e3a5f',
+      textPrimary: '#e0f2fe',
+      textSecondary: '#7dd3fc',
+      textMuted: '#38bdf8',
+      border: '#1e3a5f',
+      borderLight: '#164e63',
+      accent: '#22d3ee',
+      accentHover: '#67e8f9',
+      accentBg: '#164e63',
+      error: '#f87171',
+      errorBg: '#450a0a',
+      success: '#34d399',
+      successBg: '#064e3b',
+      warning: '#fbbf24',
+      warningBg: '#451a03',
+    },
+  },
+  chart: {
+    light: {
+      categorical: ['#0891b2', '#0369a1', '#6366f1', '#0ea5e9', '#14b8a6', '#059669', '#8b5cf6', '#64748b'],
+      sequential: ['#ecfeff', '#cffafe', '#a5f3fc', '#67e8f9', '#22d3ee', '#06b6d4', '#0891b2'],
+      diverging: ['#ef4444', '#fca5a5', '#f0f9ff', '#e0f2fe', '#5eead4', '#14b8a6'],
+    },
+    dark: {
+      categorical: ['#22d3ee', '#38bdf8', '#818cf8', '#0ea5e9', '#2dd4bf', '#34d399', '#a78bfa', '#94a3b8'],
+      sequential: ['#083344', '#164e63', '#155e75', '#0e7490', '#0891b2', '#06b6d4', '#22d3ee'],
+      diverging: ['#f87171', '#fecaca', '#1e3a5f', '#0f2942', '#5eead4', '#2dd4bf'],
+    },
+  },
+}

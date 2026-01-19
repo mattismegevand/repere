@@ -1,0 +1,11 @@
+id,name,value,category,active
+1,Alice,100.5,A,true
+2,Bob,200.0,B,true
+3,Charlie,150.75,A,false
+4,Diana,300.25,C,true
+5,Eve,50.0,B,false
+6,Frank,175.5,A,true
+7,Grace,225.0,C,false
+8,Henry,125.25,B,true
+9,Ivy,275.5,A,true
+10,Jack,80.0,C,false

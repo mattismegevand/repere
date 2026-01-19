@@ -1,0 +1,61 @@
+import type { ColorPalette } from '../types'
+
+export const rosePalette: ColorPalette = {
+  metadata: {
+    id: 'rose',
+    name: 'Rose',
+    description: 'Warm pinks and soft mauve',
+  },
+  colors: {
+    light: {
+      bgPrimary: '#fffbfc',
+      bgSecondary: '#fdf2f4',
+      bgTertiary: '#fce7eb',
+      textPrimary: '#4c1d2a',
+      textSecondary: '#831843',
+      textMuted: '#f9a8d4',
+      border: '#fbcfe8',
+      borderLight: '#fce7eb',
+      accent: '#db2777',
+      accentHover: '#be185d',
+      accentBg: '#fce7f3',
+      error: '#dc2626',
+      errorBg: '#fef2f2',
+      success: '#059669',
+      successBg: '#d1fae5',
+      warning: '#d97706',
+      warningBg: '#fef3c7',
+    },
+    dark: {
+      bgPrimary: '#1a0a10',
+      bgSecondary: '#2d1220',
+      bgTertiary: '#4a1d34',
+      textPrimary: '#fdf2f4',
+      textSecondary: '#f9a8d4',
+      textMuted: '#ec4899',
+      border: '#4a1d34',
+      borderLight: '#3d1528',
+      accent: '#f472b6',
+      accentHover: '#f9a8d4',
+      accentBg: '#831843',
+      error: '#f87171',
+      errorBg: '#450a0a',
+      success: '#34d399',
+      successBg: '#064e3b',
+      warning: '#fbbf24',
+      warningBg: '#451a03',
+    },
+  },
+  chart: {
+    light: {
+      categorical: ['#db2777', '#ec4899', '#a855f7', '#f43f5e', '#d946ef', '#f97316', '#eab308', '#64748b'],
+      sequential: ['#fdf2f8', '#fce7f3', '#fbcfe8', '#f9a8d4', '#f472b6', '#ec4899', '#db2777'],
+      diverging: ['#ef4444', '#fca5a5', '#fdf2f4', '#fce7f3', '#c4b5fd', '#a855f7'],
+    },
+    dark: {
+      categorical: ['#f472b6', '#f9a8d4', '#c084fc', '#fb7185', '#e879f9', '#fb923c', '#facc15', '#94a3b8'],
+      sequential: ['#500724', '#831843', '#9d174d', '#be185d', '#db2777', '#ec4899', '#f472b6'],
+      diverging: ['#f87171', '#fecaca', '#4a1d34', '#2d1220', '#d8b4fe', '#c084fc'],
+    },
+  },
+}

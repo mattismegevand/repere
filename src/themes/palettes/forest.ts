@@ -1,0 +1,61 @@
+import type { ColorPalette } from '../types'
+
+export const forestPalette: ColorPalette = {
+  metadata: {
+    id: 'forest',
+    name: 'Forest',
+    description: 'Natural greens and earthy tones',
+  },
+  colors: {
+    light: {
+      bgPrimary: '#fafdf7',
+      bgSecondary: '#f0fdf4',
+      bgTertiary: '#dcfce7',
+      textPrimary: '#14532d',
+      textSecondary: '#166534',
+      textMuted: '#86efac',
+      border: '#bbf7d0',
+      borderLight: '#dcfce7',
+      accent: '#16a34a',
+      accentHover: '#15803d',
+      accentBg: '#dcfce7',
+      error: '#dc2626',
+      errorBg: '#fef2f2',
+      success: '#059669',
+      successBg: '#d1fae5',
+      warning: '#d97706',
+      warningBg: '#fef3c7',
+    },
+    dark: {
+      bgPrimary: '#0a1410',
+      bgSecondary: '#0f1f17',
+      bgTertiary: '#14532d',
+      textPrimary: '#f0fdf4',
+      textSecondary: '#86efac',
+      textMuted: '#4ade80',
+      border: '#14532d',
+      borderLight: '#166534',
+      accent: '#4ade80',
+      accentHover: '#86efac',
+      accentBg: '#14532d',
+      error: '#f87171',
+      errorBg: '#450a0a',
+      success: '#34d399',
+      successBg: '#064e3b',
+      warning: '#fbbf24',
+      warningBg: '#451a03',
+    },
+  },
+  chart: {
+    light: {
+      categorical: ['#16a34a', '#84cc16', '#10b981', '#14b8a6', '#eab308', '#f59e0b', '#92400e', '#64748b'],
+      sequential: ['#f0fdf4', '#dcfce7', '#bbf7d0', '#86efac', '#4ade80', '#22c55e', '#16a34a'],
+      diverging: ['#ef4444', '#fca5a5', '#f0fdf4', '#dcfce7', '#86efac', '#22c55e'],
+    },
+    dark: {
+      categorical: ['#4ade80', '#a3e635', '#34d399', '#2dd4bf', '#facc15', '#fbbf24', '#d97706', '#94a3b8'],
+      sequential: ['#052e16', '#14532d', '#166534', '#15803d', '#16a34a', '#22c55e', '#4ade80'],
+      diverging: ['#f87171', '#fecaca', '#14532d', '#0f1f17', '#86efac', '#4ade80'],
+    },
+  },
+}

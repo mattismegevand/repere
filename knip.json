@@ -1,0 +1,4 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "ignore": ["src-tauri/target/**", "src/types/file-system-access.d.ts"]
+}

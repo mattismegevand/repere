@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- SEO -->
+    <title>repere - In-Browser Data Explorer | SQL on CSV, Parquet, XLSX</title>
+    <meta name="description" content="Explore datasets too large for spreadsheets. Run SQL queries on CSV, Parquet, and Excel files entirely in your browser. No uploads, no servers - powered by DuckDB-WASM." />
+    <meta name="keywords" content="data explorer, CSV viewer, Parquet viewer, Excel viewer, XLSX viewer, DuckDB, DuckDB-WASM, local-first, data analysis, spreadsheet alternative, SQL browser, data wrangling, ETL tool, pivot table, data transformation, no-code analytics, WebAssembly" />
+    <meta name="author" content="Mattis Megevand" />
+    <meta name="robots" content="index, follow" />
+    <meta name="application-name" content="repere" />
+    <link rel="canonical" href="https://repere.ai" />
+
+    <!-- Open Graph (Facebook, LinkedIn, etc.) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="repere - In-Browser Data Explorer" />
+    <meta property="og:description" content="Run SQL on CSV, Parquet, and Excel files in your browser. No uploads, no servers. Powered by DuckDB-WASM." />
+    <meta property="og:url" content="https://repere.ai" />
+    <meta property="og:image" content="https://repere.ai/og-image.png" />
+    <meta property="og:site_name" content="repere" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="repere - In-Browser Data Explorer" />
+    <meta name="twitter:description" content="Run SQL on CSV, Parquet, and Excel files in your browser. No uploads, no servers. Powered by DuckDB-WASM." />
+    <meta name="twitter:image" content="https://repere.ai/og-image.png" />
+
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "repere",
+      "url": "https://repere.ai",
+      "description": "In-browser data explorer for CSV, Parquet, and Excel files. Run SQL queries locally without uploading data.",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Any",
+      "browserRequirements": "Requires JavaScript, WebAssembly",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "featureList": [
+        "SQL queries on CSV, Parquet, XLSX files",
+        "Local-first - data never leaves browser",
+        "Filter, sort, group, pivot operations",
+        "Join multiple datasets",
+        "Export to CSV or Parquet",
+        "Visual pipeline canvas"
+      ],
+      "author": {
+        "@type": "Person",
+        "name": "Mattis Megevand",
+        "url": "https://mattismegevand.com"
+      }
+    }
+    </script>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Theme & Icons -->
+    <meta name="theme-color" content="#1a1a1a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="mask-icon" href="/mask-icon.svg" color="#D4A017" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

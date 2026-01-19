@@ -1,0 +1,21 @@
+# Cargo build optimizations for faster compilation
+
+[build]
+jobs = 8  # Parallel compilation jobs
+
+# DuckDB paths for dev builds (uses system DuckDB instead of bundled)
+# Install: brew install duckdb
+[env]
+DUCKDB_LIB_DIR = { value = "/opt/homebrew/lib", force = false }
+DUCKDB_INCLUDE_DIR = { value = "/opt/homebrew/include", force = false }
+# Uncomment for sccache (install: cargo install sccache)
+# RUSTC_WRAPPER = { value = "sccache", force = false }
+
+# Linux: use mold linker (install: sudo apt install mold)
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+[target.aarch64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]

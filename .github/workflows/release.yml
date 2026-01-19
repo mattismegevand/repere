@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  # Build desktop app for all platforms
+  desktop:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+            artifact: target/aarch64-apple-darwin/release/bundle/macos/repere.app
+            asset_name: repere-macos-arm64.app.tar.gz
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
+            artifact: target/x86_64-apple-darwin/release/bundle/macos/repere.app
+            asset_name: repere-macos-x64.app.tar.gz
+          - platform: ubuntu-22.04
+            args: ''
+            artifact: target/release/bundle/appimage/repere_*.AppImage
+            asset_name: repere-linux-x64.AppImage
+          - platform: windows-latest
+            args: ''
+            artifact: target/release/repere.exe
+            asset_name: repere-windows-x64.exe
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies (Ubuntu)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf mold
+
+      - name: Install frontend dependencies
+        run: bun install
+
+      - name: Build frontend
+        run: bun run build
+
+      - name: Build Tauri app
+        run: cargo build --release --features bundled --manifest-path src-tauri/Cargo.toml ${{ matrix.platform == 'macos-latest' && matrix.args || '' }}
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Bundle app (macOS)
+        if: matrix.platform == 'macos-latest'
+        run: cargo tauri build --features bundled ${{ matrix.args }}
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Bundle app (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: cargo tauri build --features bundled
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Package macOS app
+        if: matrix.platform == 'macos-latest'
+        run: |
+          cd $(dirname "${{ matrix.artifact }}")
+          tar -czf ${{ matrix.asset_name }} repere.app
+          mv ${{ matrix.asset_name }} $GITHUB_WORKSPACE/
+
+      - name: Package Linux app
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          cp ${{ matrix.artifact }} ${{ matrix.asset_name }}
+
+      - name: Package Windows app
+        if: matrix.platform == 'windows-latest'
+        run: |
+          copy ${{ matrix.artifact }} ${{ matrix.asset_name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: ${{ matrix.asset_name }}
+
+  # Publish all artifacts to GitHub release
+  publish:
+    needs: [desktop]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          files: artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,61 @@
+import type { ColorPalette } from '../types'
+
+export const modernPalette: ColorPalette = {
+  metadata: {
+    id: 'modern',
+    name: 'Modern',
+    description: 'Clean neutrals with blue accent',
+  },
+  colors: {
+    light: {
+      bgPrimary: '#ffffff',
+      bgSecondary: '#f9fafb',
+      bgTertiary: '#f3f4f6',
+      textPrimary: '#111827',
+      textSecondary: '#4b5563',
+      textMuted: '#9ca3af',
+      border: '#e5e7eb',
+      borderLight: '#f3f4f6',
+      accent: '#3b82f6',
+      accentHover: '#2563eb',
+      accentBg: '#eff6ff',
+      error: '#dc2626',
+      errorBg: '#fef2f2',
+      success: '#16a34a',
+      successBg: '#f0fdf4',
+      warning: '#d97706',
+      warningBg: '#fffbeb',
+    },
+    dark: {
+      bgPrimary: '#0f0f0f',
+      bgSecondary: '#171717',
+      bgTertiary: '#262626',
+      textPrimary: '#fafafa',
+      textSecondary: '#a3a3a3',
+      textMuted: '#737373',
+      border: '#262626',
+      borderLight: '#1f1f1f',
+      accent: '#3b82f6',
+      accentHover: '#60a5fa',
+      accentBg: '#172554',
+      error: '#f87171',
+      errorBg: '#450a0a',
+      success: '#4ade80',
+      successBg: '#052e16',
+      warning: '#fbbf24',
+      warningBg: '#451a03',
+    },
+  },
+  chart: {
+    light: {
+      categorical: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#ec4899'],
+      sequential: ['#eff6ff', '#dbeafe', '#bfdbfe', '#93c5fd', '#60a5fa', '#3b82f6', '#2563eb'],
+      diverging: ['#ef4444', '#fca5a5', '#fef2f2', '#f0fdf4', '#86efac', '#22c55e'],
+    },
+    dark: {
+      categorical: ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#22d3ee', '#fb923c', '#f472b6'],
+      sequential: ['#1e3a5f', '#1e4976', '#1e588d', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd'],
+      diverging: ['#f87171', '#fecaca', '#262626', '#1a1a1a', '#86efac', '#4ade80'],
+    },
+  },
+}

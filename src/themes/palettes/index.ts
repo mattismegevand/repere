@@ -1,0 +1,5 @@
+export { classicPalette } from './classic'
+export { forestPalette } from './forest'
+export { modernPalette } from './modern'
+export { oceanPalette } from './ocean'
+export { rosePalette } from './rose'

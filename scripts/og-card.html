@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 1200px;
+      height: 630px;
+      background: #fafafa;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card {
+      width: 100%;
+      height: 100%;
+      padding: 80px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .logo-icon {
+      width: 72px;
+      height: 72px;
+      background: #0f172a;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-inner {
+      width: 32px;
+      height: 32px;
+      background: #e5e7eb;
+      border-radius: 7px;
+    }
+
+    .logo-text {
+      font-size: 42px;
+      font-weight: 600;
+      color: #0f172a;
+      letter-spacing: -0.02em;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 100px;
+      background: rgba(59, 130, 246, 0.1);
+      color: #3b82f6;
+      font-size: 15px;
+      font-weight: 500;
+      margin-bottom: 28px;
+      width: fit-content;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #3b82f6;
+    }
+
+    .headline {
+      font-size: 72px;
+      font-weight: 600;
+      color: #0f172a;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      margin-bottom: 24px;
+    }
+
+    .subheadline {
+      font-size: 24px;
+      color: #64748b;
+      font-weight: 500;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <div class="logo-icon">
+        <div class="logo-inner"></div>
+      </div>
+      <span class="logo-text">repere</span>
+    </div>
+
+    <div class="badge">
+      <span class="badge-dot"></span>
+      100% client-side - Your data never leaves your browser
+    </div>
+
+    <h1 class="headline">
+      Explore datasets too large<br>
+      for spreadsheets.
+    </h1>
+
+    <p class="subheadline">
+      SQL-powered data exploration that runs entirely in your browser.<br>
+      No uploads. No server. No signup.
+    </p>
+  </div>
+</body>
+</html>

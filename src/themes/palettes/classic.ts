@@ -1,0 +1,61 @@
+import type { ColorPalette } from '../types'
+
+export const classicPalette: ColorPalette = {
+  metadata: {
+    id: 'classic',
+    name: 'Classic',
+    description: 'Bloomberg terminal style - high contrast with orange accents',
+  },
+  colors: {
+    light: {
+      bgPrimary: '#1a1a1a',
+      bgSecondary: '#0d0d0d',
+      bgTertiary: '#262626',
+      textPrimary: '#ff9900',
+      textSecondary: '#cccccc',
+      textMuted: '#808080',
+      border: '#404040',
+      borderLight: '#333333',
+      accent: '#ff6600',
+      accentHover: '#ff8533',
+      accentBg: '#331a00',
+      error: '#ff3333',
+      errorBg: '#330000',
+      success: '#00ff00',
+      successBg: '#003300',
+      warning: '#ffcc00',
+      warningBg: '#332b00',
+    },
+    dark: {
+      bgPrimary: '#000000',
+      bgSecondary: '#0a0a0a',
+      bgTertiary: '#1a1a1a',
+      textPrimary: '#ff9900',
+      textSecondary: '#cccccc',
+      textMuted: '#666666',
+      border: '#333333',
+      borderLight: '#1a1a1a',
+      accent: '#ff6600',
+      accentHover: '#ff8533',
+      accentBg: '#1a0d00',
+      error: '#ff3333',
+      errorBg: '#1a0000',
+      success: '#00ff00',
+      successBg: '#001a00',
+      warning: '#ffcc00',
+      warningBg: '#1a1500',
+    },
+  },
+  chart: {
+    light: {
+      categorical: ['#ff9900', '#00ccff', '#ffcc00', '#00ff00', '#ff3333', '#cc66ff', '#ffffff', '#ff6600'],
+      sequential: ['#331a00', '#4d2600', '#663300', '#994d00', '#cc6600', '#ff8533', '#ff9900'],
+      diverging: ['#ff3333', '#ff6666', '#333333', '#1a1a1a', '#66ff66', '#00ff00'],
+    },
+    dark: {
+      categorical: ['#ff9900', '#00ccff', '#ffcc00', '#00ff00', '#ff3333', '#cc66ff', '#cccccc', '#ff6600'],
+      sequential: ['#1a0d00', '#331a00', '#4d2600', '#663300', '#994d00', '#cc6600', '#ff9900'],
+      diverging: ['#ff3333', '#ff6666', '#1a1a1a', '#0d0d0d', '#66ff66', '#00ff00'],
+    },
+  },
+}
