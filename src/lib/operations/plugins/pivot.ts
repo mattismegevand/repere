@@ -1,4 +1,4 @@
-import { Table2 } from 'lucide-react'
+import Table2 from 'lucide-react/dist/esm/icons/table-2'
 import { buildAggregate, buildWhereClause, escapeIdentifier } from '@/lib/duckdb/sql-builder/utils'
 import type { ToolDefinition } from '@/types/ai'
 import type { Column } from '@/types/dataset'
@@ -10,6 +10,7 @@ const ui: OperationUiMeta = {
   icon: Table2,
   color: 'purple',
   editable: true,
+  editor: { type: 'pivot' },
 }
 
 const toolDefinition: ToolDefinition = {

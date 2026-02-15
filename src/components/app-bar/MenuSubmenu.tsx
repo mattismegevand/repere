@@ -1,5 +1,5 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { ChevronRight } from 'lucide-react'
+import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right'
 import type { ReactNode } from 'react'
 
 interface MenuSubmenuProps {

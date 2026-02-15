@@ -1,4 +1,4 @@
-import type { PipelineSnapshot } from '@/stores/pipelineStore'
+import type { PipelineSnapshot } from '@/stores/pipelineTypes'
 import type { DataView, PipelineNode } from '@/types'
 
 /**

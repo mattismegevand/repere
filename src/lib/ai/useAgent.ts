@@ -28,7 +28,11 @@ export function useAgent() {
     return state.activeNodeId ? state.nodes[state.activeNodeId] : null
   }, [])
 
-  const { apiKey, model, addMessage, setLoading, messages: chatHistory } = useChatStore()
+  const apiKey = useChatStore((s) => s.apiKey)
+  const model = useChatStore((s) => s.model)
+  const addMessage = useChatStore((s) => s.addMessage)
+  const setLoading = useChatStore((s) => s.setLoading)
+  const chatHistory = useChatStore((s) => s.messages)
   const { applyOrReplaceOperation, createChart, createExport } = usePipeline()
 
   // Execution state

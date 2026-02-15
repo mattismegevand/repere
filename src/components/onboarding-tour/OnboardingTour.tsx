@@ -5,8 +5,8 @@ import { useEffect, useRef } from 'react'
 import { resetGlobalCacheManager } from '@/lib/cache'
 import { usePipeline } from '@/lib/pipeline'
 import { formatShortcut } from '@/lib/platform'
-import { usePanelStore } from '@/stores'
 import { useChatStore } from '@/stores/chatStore'
+import { usePanelStore } from '@/stores/panelStore'
 import type { FilterOperation, PivotOperation, SortOperation } from '@/types'
 
 export function OnboardingTour() {

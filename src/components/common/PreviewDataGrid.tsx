@@ -1,4 +1,5 @@
-import { ArrowDown, ArrowUp } from 'lucide-react'
+import ArrowDown from 'lucide-react/dist/esm/icons/arrow-down'
+import ArrowUp from 'lucide-react/dist/esm/icons/arrow-up'
 import { useMemo, useState } from 'react'
 import { formatCell } from '@/lib/formatters'
 import type { Column } from '@/types'

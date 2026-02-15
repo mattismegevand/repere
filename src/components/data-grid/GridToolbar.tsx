@@ -1,7 +1,8 @@
 import { useRef } from 'react'
+import { useGridColumnStore, useGridUIStore } from '@/components/data-grid/stores'
 import { Checkbox } from '@/components/ui'
 import { formatShortcut } from '@/lib/platform'
-import { useGridColumnStore, useGridUIStore, useQueryStore } from '@/stores'
+import { useQueryStore } from '@/stores/queryStore'
 import type { Column, Sort } from '@/types'
 
 interface GridToolbarProps {

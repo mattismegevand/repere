@@ -1,4 +1,12 @@
-import { ArrowUp, Bot, CheckCircle2, Loader2, Settings, Square, Trash2, X, XCircle } from 'lucide-react'
+import ArrowUp from 'lucide-react/dist/esm/icons/arrow-up'
+import Bot from 'lucide-react/dist/esm/icons/bot'
+import CheckCircle2 from 'lucide-react/dist/esm/icons/check-circle-2'
+import Loader2 from 'lucide-react/dist/esm/icons/loader-2'
+import Settings from 'lucide-react/dist/esm/icons/settings'
+import Square from 'lucide-react/dist/esm/icons/square'
+import Trash2 from 'lucide-react/dist/esm/icons/trash-2'
+import X from 'lucide-react/dist/esm/icons/x'
+import XCircle from 'lucide-react/dist/esm/icons/x-circle'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { useAgent } from '@/lib/ai/useAgent'
@@ -10,13 +18,19 @@ import { ApiKeySetup } from './ApiKeySetup'
 import { ChatMessage } from './ChatMessage'
 
 export function AIChat() {
-  const { isOpen, setOpen, messages, isLoading, apiKey, clearMessages } = useChatStore()
+  const isOpen = useChatStore((s) => s.isOpen)
+  const setOpen = useChatStore((s) => s.setOpen)
+  const messages = useChatStore((s) => s.messages)
+  const isLoading = useChatStore((s) => s.isLoading)
+  const apiKey = useChatStore((s) => s.apiKey)
+  const clearMessages = useChatStore((s) => s.clearMessages)
   const { sendMessage, abort, isRunning, status, steps } = useAgent()
   const setActiveNode = usePipelineStore((s) => s.setActiveNode)
   const nodes = usePipelineStore((s) => s.nodes)
   const structureStyle = useThemeStore((s) => s.structureStyle)
   const isClassic = structureStyle === 'classic'
-  const { aiChatPanelWidth, setAiChatPanelWidth } = usePanelStore()
+  const aiChatPanelWidth = usePanelStore((s) => s.aiChatPanelWidth)
+  const setAiChatPanelWidth = usePanelStore((s) => s.setAiChatPanelWidth)
 
   const [input, setInput] = useState('')
   const [showSettings, setShowSettings] = useState(false)

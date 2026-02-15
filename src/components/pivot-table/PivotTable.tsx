@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { usePivotStore } from '@/stores'
+import { usePivotStore } from '@/stores/pivotStore'
 import { PivotRow } from './PivotRow'
 import type { PivotRow as PivotRowType, PivotTableData } from './types'
 
@@ -9,7 +9,11 @@ interface PivotTableProps {
 }
 
 export function PivotTable({ data, onCellClick }: PivotTableProps) {
-  const { expandedGroups, toggleGroupExpand, sortColumn, sortDirection, setSort } = usePivotStore()
+  const expandedGroups = usePivotStore((s) => s.expandedGroups)
+  const toggleGroupExpand = usePivotStore((s) => s.toggleGroupExpand)
+  const sortColumn = usePivotStore((s) => s.sortColumn)
+  const sortDirection = usePivotStore((s) => s.sortDirection)
+  const setSort = usePivotStore((s) => s.setSort)
 
   const [hoveredColumn, setHoveredColumn] = useState<string | null>(null)
 

@@ -1,4 +1,4 @@
-import type { DataView, PipelineEdge, PipelineNode } from '@/types'
+import type { PipelineEdge, PipelineNode } from '@/types'
 
 // Adjacency map types for O(1) lookups
 export type AdjacencyMap = Map<string, Set<string>>
@@ -74,7 +74,8 @@ export function getRootNodes(
 export function getTopologicalOrder(
   nodes: Record<string, PipelineNode>,
   edges: PipelineEdge[],
-  outgoing?: AdjacencyMap
+  outgoing?: AdjacencyMap,
+  incoming?: AdjacencyMap
 ): string[] {
   const order: string[] = []
   const visited = new Set<string>()
@@ -91,10 +92,10 @@ export function getTopologicalOrder(
   const queue: string[] = []
   for (const node of Object.values(nodes)) {
     if (node.type === 'view') {
-      const view = node as DataView
-      const parentCount = view.parentIds.filter((pid) => nodes[pid]?.type === 'view').length
+      const parentIds = getParents(node.id, edges, incoming)
+      const parentCount = parentIds.filter((pid) => nodes[pid]?.type === 'view').length
       if (parentCount === 0) {
-        queue.push(view.id)
+        queue.push(node.id)
       }
     }
   }
@@ -113,10 +114,10 @@ export function getTopologicalOrder(
       if (visited.has(childId)) continue
       const targetNode = nodes[childId]
       if (targetNode?.type === 'view') {
-        const view = targetNode as DataView
-        const allParentsVisited = view.parentIds.every((pid) => visited.has(pid))
+        const parentIds = getParents(childId, edges, incoming)
+        const allParentsVisited = parentIds.every((pid) => visited.has(pid))
         if (allParentsVisited) {
-          queue.push(view.id)
+          queue.push(childId)
         }
       }
     }

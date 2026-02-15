@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useCachedQuery, useCacheManagerOptional } from '@/lib/cache'
-import { usePipelineStore } from '@/stores'
+import { usePipelineStore } from '@/stores/pipelineStore'
 import type { ChartAggregation, ChartConfig, ChartType, DashboardFilter } from '@/types'
 import type { DuckDBClient } from './interface'
 import { escapeIdentifier, escapeValue } from './sql-builder'

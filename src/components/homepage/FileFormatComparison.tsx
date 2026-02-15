@@ -1,4 +1,7 @@
-import { FileArchive, FileJson, FileSpreadsheet, FileText } from 'lucide-react'
+import FileArchive from 'lucide-react/dist/esm/icons/file-archive'
+import FileJson from 'lucide-react/dist/esm/icons/file-json'
+import FileSpreadsheet from 'lucide-react/dist/esm/icons/file-spreadsheet'
+import FileText from 'lucide-react/dist/esm/icons/file-text'
 import { useState } from 'react'
 
 interface FormatInfo {

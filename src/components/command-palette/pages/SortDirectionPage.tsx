@@ -1,5 +1,6 @@
 import { Command } from 'cmdk'
-import { ArrowDownAZ, ArrowUpAZ } from 'lucide-react'
+import ArrowDownAZ from 'lucide-react/dist/esm/icons/arrow-down-az'
+import ArrowUpAZ from 'lucide-react/dist/esm/icons/arrow-up-az'
 import { usePipeline } from '@/lib/pipeline/usePipeline'
 import type { SortOperation } from '@/types'
 import { useCommandPalette } from '../CommandPaletteContext'

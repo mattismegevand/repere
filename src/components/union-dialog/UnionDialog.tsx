@@ -6,9 +6,11 @@ import { Button, DialogErrorBanner } from '@/components/ui'
 import { RadixDialog } from '@/components/ui/RadixDialog'
 import { useDuckDB } from '@/lib/duckdb'
 import { useOperationDialog } from '@/lib/hooks/useOperationDialog'
+import { useHydratedNodes } from '@/lib/pipeline/hooks/useHydratedNodes'
+import type { HydratedNode } from '@/lib/pipeline/hydration'
 import { usePipeline } from '@/lib/pipeline/usePipeline'
-import { useDialogStore, usePipelineStore } from '@/stores'
-import { type DataView, isTerminalNode, type PipelineNode, type UnionOperation } from '@/types'
+import { useDialogStore } from '@/stores/dialogStore'
+import { isTerminalNode, type UnionOperation } from '@/types'
 import { type UnionFormValues, unionFormSchema } from './schema'
 
 const PREVIEW_LIMIT = 100
@@ -21,21 +23,21 @@ function escapeIdentifier(name: string): string {
   return `"${name.replace(/"/g, '""')}"`
 }
 
-function buildUnionPreviewSql(nodes: PipelineNode[], mode: 'all' | 'distinct'): string {
+function buildUnionPreviewSql(nodes: HydratedNode[], mode: 'all' | 'distinct'): string {
   const unionKeyword = mode === 'all' ? 'UNION ALL' : 'UNION'
-  return nodes.map((node) => `SELECT * FROM ${escapeIdentifier(node.tableName)}`).join(` ${unionKeyword} `)
+  return nodes.map((node) => `SELECT * FROM ${escapeIdentifier(node.tableName ?? '')}`).join(` ${unionKeyword} `)
 }
 
-function checkColumnCompatibility(nodes: PipelineNode[]): { compatible: boolean; message: string; details?: string } {
+function checkColumnCompatibility(nodes: HydratedNode[]): { compatible: boolean; message: string; details?: string } {
   if (nodes.length < 2) {
     return { compatible: false, message: 'Select at least 2 tables' }
   }
 
-  const firstColumns = nodes[0].columns
+  const firstColumns = nodes[0].columns ?? []
   const firstColCount = firstColumns.length
 
   for (let i = 1; i < nodes.length; i++) {
-    const cols = nodes[i].columns
+    const cols = nodes[i].columns ?? []
     if (cols.length !== firstColCount) {
       return {
         compatible: false,
@@ -59,15 +61,15 @@ function checkColumnCompatibility(nodes: PipelineNode[]): { compatible: boolean;
 }
 
 export function UnionDialog({ onClose }: Props) {
-  const { nodes } = usePipelineStore()
-  const { activeDialog } = useDialogStore()
+  const nodes = useHydratedNodes()
+  const activeDialog = useDialogStore((s) => s.activeDialog)
   const { applyOperation, openTab, deleteNode } = usePipeline()
   const { client } = useDuckDB()
 
   const unionPreSelectedNodes = activeDialog?.type === 'union' ? (activeDialog.preSelectedNodes ?? []) : []
   const unionEditingNodeId = activeDialog?.type === 'union' ? activeDialog.editingNodeId : undefined
 
-  const editingNode = unionEditingNodeId ? (nodes[unionEditingNodeId] as DataView | undefined) : null
+  const editingNode = unionEditingNodeId ? nodes[unionEditingNodeId] : null
   const isEditing = !!editingNode && editingNode.type === 'view' && editingNode.operation.type === 'union'
 
   const nodeList = useMemo(
@@ -78,7 +80,9 @@ export function UnionDialog({ onClose }: Props) {
   const initialSelectedIds = useMemo(() => {
     if (isEditing && editingNode) {
       const unionOp = editingNode.operation as UnionOperation
-      return [editingNode.parentIds[0], ...unionOp.sourceIds].filter((id: string) => nodes[id])
+      return [editingNode.parentIds[0], ...unionOp.sourceIds].filter(
+        (id: string | undefined): id is string => !!id && !!nodes[id]
+      )
     }
     return unionPreSelectedNodes.filter((id: string) => nodes[id])
   }, [isEditing, editingNode, unionPreSelectedNodes, nodes])
@@ -106,13 +110,21 @@ export function UnionDialog({ onClose }: Props) {
   useEffect(() => {
     if (isEditing && editingNode) {
       const unionOp = editingNode.operation as UnionOperation
-      const allSourceIds = [editingNode.parentIds[0], ...unionOp.sourceIds].filter((id) => nodes[id])
+      const allSourceIds = [editingNode.parentIds[0], ...unionOp.sourceIds].filter(
+        (id): id is string => !!id && !!nodes[id]
+      )
       setValue('selectedIds', allSourceIds)
       setValue('mode', unionOp.mode)
     }
   }, [isEditing, editingNode, nodes, setValue])
 
-  const selectedNodes = useMemo(() => selectedIds.map((id) => nodes[id]).filter(Boolean), [selectedIds, nodes])
+  const selectedNodes = useMemo(
+    () =>
+      selectedIds
+        .map((id) => nodes[id])
+        .filter((node): node is HydratedNode => !!node && !!node.tableName && !!node.columns),
+    [selectedIds, nodes]
+  )
 
   const compatibility = useMemo(() => checkColumnCompatibility(selectedNodes), [selectedNodes])
 
@@ -285,7 +297,7 @@ export function UnionDialog({ onClose }: Props) {
             }`}
           >
             <div className="font-medium">{compatibility.message}</div>
-            {compatibility.details && <div className="mt-1 opacity-80">{compatibility.details}</div>}
+            {compatibility.details ? <div className="mt-1 opacity-80">{compatibility.details}</div> : null}
           </div>
         )}
 

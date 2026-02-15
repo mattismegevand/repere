@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { isInternalColumn, useGridColumnStore } from '@/stores'
+import { isInternalColumn, useGridColumnStore } from '@/components/data-grid/stores'
 import type { Column } from '@/types'
 
 export interface UseColumnStateOptions {

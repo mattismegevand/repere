@@ -1,6 +1,7 @@
-import { SquareCode } from 'lucide-react'
+import SquareCode from 'lucide-react/dist/esm/icons/square-code'
 import type { ToolDefinition } from '@/types/ai'
-import type { OperationType, ViewOperation } from '@/types/pipeline'
+import type { Column } from '@/types/dataset'
+import type { OperationType, PipelineNode, ViewOperation } from '@/types/pipeline'
 import {
   addColumnPlugin,
   castColumnPlugin,
@@ -23,7 +24,7 @@ import {
   unpivotPlugin,
   windowPlugin,
 } from './plugins'
-import type { OperationContext, OperationPlugin, OperationUiMeta } from './types'
+import type { OperationContext, OperationPlugin, OperationUiMeta, ValidationResult } from './types'
 
 const defaultUiMeta: OperationUiMeta = {
   label: 'Unknown',
@@ -122,5 +123,26 @@ export function getOperationUiMeta(operationType: OperationType): OperationUiMet
   return plugin?.ui ?? defaultUiMeta
 }
 
+/**
+ * Validate a tool call from the AI agent before execution.
+ * Returns validation result with errors/warnings.
+ */
+export function validateToolCall(
+  toolName: string,
+  args: Record<string, unknown>,
+  columns: Column[],
+  nodes?: Record<string, PipelineNode>
+): ValidationResult {
+  const plugin = pluginRegistry.get(toolName)
+  if (!plugin) {
+    return {
+      valid: false,
+      errors: [`Unknown operation: "${toolName}". Available: ${Array.from(pluginRegistry.keys()).join(', ')}`],
+      warnings: [],
+    }
+  }
+  return plugin.validate(args, columns, nodes)
+}
+
 // Re-export types
-export type { OperationUiMeta }
+export type { OperationUiMeta, ValidationResult }

@@ -25,16 +25,13 @@ import { useDuckDB } from '@/lib/duckdb'
 import { exportData } from '@/lib/export/exporter'
 import { getLayoutedPositions } from '@/lib/graph/auto-layout'
 import { useEngineDispatcher } from '@/lib/pipeline/hooks/useEngineDispatcher'
+import { useHydratedNodes } from '@/lib/pipeline/hooks/useHydratedNodes'
+import type { HydratedNode } from '@/lib/pipeline/hydration'
 import { usePipeline } from '@/lib/pipeline/usePipeline'
-import { useDialogStore, usePanelStore, usePipelineStore, useThemeStore } from '@/stores'
-import type {
-  ChartNode as ChartNodeType,
-  DashboardNode as DashboardNodeType,
-  Dataset,
-  DataView,
-  ExportNode as ExportNodeType,
-  PythonNode as PythonNodeType,
-} from '@/types'
+import { useDialogStore } from '@/stores/dialogStore'
+import { usePanelStore } from '@/stores/panelStore'
+import { usePipelineStore } from '@/stores/pipelineStore'
+import { useThemeStore } from '@/stores/themeStore'
 import { AutoLayoutPanel } from './AutoLayoutPanel'
 import { ConnectionTypeDialog } from './ConnectionTypeDialog'
 import { EdgeContextMenu } from './EdgeContextMenu'
@@ -57,14 +54,21 @@ const nodeTypes: NodeTypes = {
   python: PythonNode,
 }
 
+type HydratedDataset = Extract<HydratedNode, { type: 'dataset' }>
+type HydratedView = Extract<HydratedNode, { type: 'view' }>
+type HydratedChart = Extract<HydratedNode, { type: 'chart' }>
+type HydratedExport = Extract<HydratedNode, { type: 'export' }>
+type HydratedDashboard = Extract<HydratedNode, { type: 'dashboard' }>
+type HydratedPython = Extract<HydratedNode, { type: 'python' }>
+
 export function PipelineCanvas() {
   // Use individual selectors for data to avoid unnecessary re-renders
-  const pipelineNodes = usePipelineStore((s) => s.nodes)
+  const pipelineNodes = useHydratedNodes()
   const pipelineEdges = usePipelineStore((s) => s.edges)
   const activeNodeId = usePipelineStore((s) => s.activeNodeId)
   const selectedNodeId = usePipelineStore((s) => s.selectedNodeId)
-  // Actions are stable references, can destructure
-  const { getNodeChildren, getNodeDescendants } = usePipelineStore()
+  const getNodeChildren = usePipelineStore((s) => s.getNodeChildren)
+  const getNodeDescendants = usePipelineStore((s) => s.getNodeDescendants)
   const { openTab, fillPlaceholder, deleteNode, rewireNode } = usePipeline()
 
   // Use engine dispatcher for mutations - routes through PipelineEngine
@@ -75,9 +79,12 @@ export function PipelineCanvas() {
   const nodeContextMenu = usePanelStore((s) => s.nodeContextMenu)
   const edgeContextMenu = usePanelStore((s) => s.edgeContextMenu)
   const activeDialog = useDialogStore((s) => s.activeDialog)
-  // Actions are stable references
-  const { openDialog, closeDialog } = useDialogStore()
-  const { setNodeContextMenu, setEdgeContextMenu, setCanvasMode, closeChartPanel } = usePanelStore()
+  const openDialog = useDialogStore((s) => s.openDialog)
+  const closeDialog = useDialogStore((s) => s.closeDialog)
+  const setNodeContextMenu = usePanelStore((s) => s.setNodeContextMenu)
+  const setEdgeContextMenu = usePanelStore((s) => s.setEdgeContextMenu)
+  const setCanvasMode = usePanelStore((s) => s.setCanvasMode)
+  const closeChartPanel = usePanelStore((s) => s.closeChartPanel)
 
   // Get connection type dialog state from activeDialog
   const connectionTypeDialogOpen = activeDialog?.type === 'connectionType'
@@ -102,11 +109,11 @@ export function PipelineCanvas() {
       }
 
       if (node.type === 'dataset') {
-        const dataset = node as Dataset
+        const dataset = node as HydratedDataset
         return {
           id: node.id,
           type: 'dataset',
-          position: node.position,
+          position: node.position ?? { x: 100, y: 100 },
           selected: isMultiSelected,
           data: {
             ...baseData,
@@ -116,11 +123,11 @@ export function PipelineCanvas() {
           deletable: false,
         }
       } else if (node.type === 'chart') {
-        const chart = node as ChartNodeType
+        const chart = node as HydratedChart
         return {
           id: node.id,
           type: 'chart',
-          position: node.position,
+          position: node.position ?? { x: 100, y: 100 },
           selected: isMultiSelected,
           data: {
             ...baseData,
@@ -129,11 +136,11 @@ export function PipelineCanvas() {
           deletable: false,
         }
       } else if (node.type === 'export') {
-        const exportNode = node as ExportNodeType
+        const exportNode = node as HydratedExport
         return {
           id: node.id,
           type: 'export',
-          position: node.position,
+          position: node.position ?? { x: 100, y: 100 },
           selected: isMultiSelected,
           data: {
             ...baseData,
@@ -142,11 +149,11 @@ export function PipelineCanvas() {
           deletable: false,
         }
       } else if (node.type === 'dashboard') {
-        const dashboardNode = node as DashboardNodeType
+        const dashboardNode = node as HydratedDashboard
         return {
           id: node.id,
           type: 'dashboard',
-          position: node.position,
+          position: node.position ?? { x: 100, y: 100 },
           selected: isMultiSelected,
           style: {
             width: dashboardNode.dimensions?.width ?? 320,
@@ -159,11 +166,11 @@ export function PipelineCanvas() {
           deletable: false,
         }
       } else if (node.type === 'python') {
-        const pythonNode = node as PythonNodeType
+        const pythonNode = node as HydratedPython
         return {
           id: node.id,
           type: 'python',
-          position: node.position,
+          position: node.position ?? { x: 100, y: 100 },
           selected: isMultiSelected,
           data: {
             ...baseData,
@@ -172,11 +179,11 @@ export function PipelineCanvas() {
           deletable: false,
         }
       } else {
-        const view = node as DataView
+        const view = node as HydratedView
         return {
           id: node.id,
           type: 'view',
-          position: node.position,
+          position: node.position ?? { x: 100, y: 100 },
           selected: isMultiSelected,
           data: {
             ...baseData,
@@ -206,17 +213,15 @@ export function PipelineCanvas() {
       for (const change of changes) {
         if (change.type === 'position' && change.position) {
           // Route position updates through engine
-          dispatch({ type: 'updateNode', nodeId: change.id, updates: { position: change.position } })
+          usePipelineStore.getState().updateNode(change.id, { position: change.position })
         }
         // Handle dimension changes from NodeResizer
         if (change.type === 'dimensions' && change.dimensions) {
           const node = usePipelineStore.getState().nodes[change.id]
           if (node?.type === 'dashboard') {
             // Route dimension updates through engine
-            dispatch({
-              type: 'updateNode',
-              nodeId: change.id,
-              updates: { dimensions: { width: change.dimensions.width, height: change.dimensions.height } },
+            usePipelineStore.getState().updateNode(change.id, {
+              dimensions: { width: change.dimensions.width, height: change.dimensions.height },
             })
           }
         }
@@ -424,7 +429,7 @@ export function PipelineCanvas() {
 
       // Check for placeholder source nodes
       const sourceEmpty =
-        (sourceNode.type === 'dataset' && (sourceNode as Dataset).isPlaceholder) ||
+        (sourceNode.type === 'dataset' && (sourceNode as HydratedDataset).isPlaceholder) ||
         (sourceNode.rowCount !== null && sourceNode.rowCount === 0)
 
       if (sourceEmpty) {
@@ -508,7 +513,7 @@ export function PipelineCanvas() {
       )}
 
       {/* Edge context menu */}
-      {edgeContextMenu && <EdgeContextMenu menu={edgeContextMenu} onClose={() => setEdgeContextMenu(null)} />}
+      {edgeContextMenu ? <EdgeContextMenu menu={edgeContextMenu} onClose={() => setEdgeContextMenu(null)} /> : null}
 
       {/* Multi-select action bar */}
       <SelectionActionBar selectedNodeIds={multiSelectedNodeIds} />
@@ -537,13 +542,14 @@ const CanvasKeyboardHandler = memo(function CanvasKeyboardHandler({
 }: CanvasKeyboardHandlerProps) {
   const { fitView, zoomIn, zoomOut, getNodes, getEdges, setNodes } = useReactFlow()
   // Use individual selectors for data to avoid unnecessary re-renders
-  const pipelineNodes = usePipelineStore((s) => s.nodes)
+  const pipelineNodes = useHydratedNodes()
   const selectedNodeId = usePipelineStore((s) => s.selectedNodeId)
-  // Actions are stable references, can destructure
-  const { getNodeChildren, duplicateBranch } = usePipelineStore()
+  const getNodeChildren = usePipelineStore((s) => s.getNodeChildren)
+  const duplicateBranch = usePipelineStore((s) => s.duplicateBranch)
   const { openTab, deleteNode } = usePipeline()
-  const { setCanvasMode, openChartPanel } = usePanelStore()
-  const { openDialog } = useDialogStore()
+  const setCanvasMode = usePanelStore((s) => s.setCanvasMode)
+  const openChartPanel = usePanelStore((s) => s.openChartPanel)
+  const openDialog = useDialogStore((s) => s.openDialog)
   const { client } = useDuckDB()
 
   // Use engine dispatcher for mutations
@@ -563,8 +569,8 @@ const CanvasKeyboardHandler = memo(function CanvasKeyboardHandler({
 
   // Get sorted node IDs for navigation
   const sortedNodeIds = useMemo(() => {
-    return Object.values(pipelineNodes)
-      .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x)
+    return [...Object.values(pipelineNodes)]
+      .sort((a, b) => (a.position?.y ?? 0) - (b.position?.y ?? 0) || (a.position?.x ?? 0) - (b.position?.x ?? 0))
       .map((n) => n.id)
   }, [pipelineNodes])
 
@@ -650,7 +656,7 @@ const CanvasKeyboardHandler = memo(function CanvasKeyboardHandler({
           )
           // Sync to pipeline store via engine for persistence
           for (const [nodeId, position] of positions) {
-            dispatch({ type: 'updateNode', nodeId, updates: { position } })
+            usePipelineStore.getState().updateNode(nodeId, { position })
           }
           setTimeout(() => fitView({ padding: 0.2, duration: 200 }), 50)
         }
@@ -726,9 +732,9 @@ const CanvasKeyboardHandler = memo(function CanvasKeyboardHandler({
 
         // Export node: trigger download
         if (node?.type === 'export' && client) {
-          const exportNode = node as ExportNodeType
-          const parentNode = pipelineNodes[exportNode.parentId]
-          if (parentNode) {
+          const exportNode = node as HydratedExport
+          const parentNode = exportNode.parentId ? pipelineNodes[exportNode.parentId] : undefined
+          if (parentNode?.tableName) {
             const filename = exportNode.config.filename ?? parentNode.name.replace(/[^a-zA-Z0-9_-]/g, '_')
             exportData({
               client,
@@ -742,8 +748,10 @@ const CanvasKeyboardHandler = memo(function CanvasKeyboardHandler({
 
         // Chart node: open chart popover for editing
         if (node?.type === 'chart') {
-          const chartNode = node as ChartNodeType
-          openChartPanel(chartNode.parentId, chartNode.id, { x: window.innerWidth / 2, y: 100 })
+          const chartNode = node as HydratedChart
+          if (chartNode.parentId) {
+            openChartPanel(chartNode.parentId, chartNode.id, { x: window.innerWidth / 2, y: 100 })
+          }
           return
         }
 

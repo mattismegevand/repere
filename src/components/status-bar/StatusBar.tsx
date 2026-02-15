@@ -1,8 +1,13 @@
-import { BarChart3, Database, Grid3X3, Redo2, Undo2, Workflow } from 'lucide-react'
+import BarChart3 from 'lucide-react/dist/esm/icons/bar-chart-3'
+import Database from 'lucide-react/dist/esm/icons/database'
+import Grid3X3 from 'lucide-react/dist/esm/icons/grid-3-x-3'
+import Redo2 from 'lucide-react/dist/esm/icons/redo-2'
+import Undo2 from 'lucide-react/dist/esm/icons/undo-2'
+import Workflow from 'lucide-react/dist/esm/icons/workflow'
 import { PythonIcon } from '@/components/icons/PythonIcon'
 import { useCanvasToggle } from '@/lib/hooks/useCanvasToggle'
 import { usePipeline } from '@/lib/pipeline/usePipeline'
-import { usePanelStore } from '@/stores'
+import { usePanelStore } from '@/stores/panelStore'
 import { DatasetDropdown } from './DatasetDropdown'
 import { StatusBarButton } from './StatusBarButton'
 import { StatusBarDivider } from './StatusBarDivider'
@@ -67,11 +72,11 @@ export function StatusBar({ className = '', selectionStats }: StatusBarProps) {
       <StatusBarSection position="center">
         <StatusBarItem>
           <span className="text-[var(--color-text-secondary)]">
-            {activeNode.rowCount !== null ? activeNode.rowCount.toLocaleString() : '...'} rows
+            {typeof activeNode.rowCount === 'number' ? activeNode.rowCount.toLocaleString() : '...'} rows
           </span>
         </StatusBarItem>
         <StatusBarItem>
-          <span className="text-[var(--color-text-secondary)]">{activeNode.columns.length} cols</span>
+          <span className="text-[var(--color-text-secondary)]">{activeNode.columns?.length ?? 0} cols</span>
         </StatusBarItem>
 
         {selectionStats && (
@@ -79,11 +84,15 @@ export function StatusBar({ className = '', selectionStats }: StatusBarProps) {
             <StatusBarDivider />
             <StatusBarItem className="text-[var(--color-accent)]">{selectionStats.description}</StatusBarItem>
             <StatusBarItem>Count: {selectionStats.count}</StatusBarItem>
-            {selectionStats.unique !== undefined && <StatusBarItem>Unique: {selectionStats.unique}</StatusBarItem>}
+            {selectionStats.unique !== undefined ? (
+              <StatusBarItem>Unique: {selectionStats.unique}</StatusBarItem>
+            ) : null}
             {selectionStats.sum !== undefined && (
               <StatusBarItem>Sum: {selectionStats.sum.toLocaleString()}</StatusBarItem>
             )}
-            {selectionStats.avg !== undefined && <StatusBarItem>Avg: {selectionStats.avg.toFixed(2)}</StatusBarItem>}
+            {selectionStats.avg !== undefined ? (
+              <StatusBarItem>Avg: {selectionStats.avg.toFixed(2)}</StatusBarItem>
+            ) : null}
           </>
         )}
       </StatusBarSection>

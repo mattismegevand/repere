@@ -1,4 +1,5 @@
-import { ExternalLink, Upload } from 'lucide-react'
+import ExternalLink from 'lucide-react/dist/esm/icons/external-link'
+import Upload from 'lucide-react/dist/esm/icons/upload'
 import { siGithub } from 'simple-icons'
 import { useInView } from '@/hooks'
 

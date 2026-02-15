@@ -16,7 +16,6 @@ export interface Column {
   name: string
   type: ColumnType
   nullable: boolean
-  duckdbType?: string // Original DuckDB type for exact recreation (e.g., "BIGINT", "VARCHAR")
 }
 
 export type FilterOperator =

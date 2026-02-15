@@ -3,7 +3,7 @@ import { useCacheManagerOptional } from '@/lib/cache'
 import { useDuckDB } from '@/lib/duckdb'
 import { buildCountQuery, buildSelectQuery } from '@/lib/duckdb/query-builder'
 import { normalizeRowDates } from '@/lib/formatters'
-import { usePipelineStore } from '@/stores'
+import { usePipelineStore } from '@/stores/pipelineStore'
 import type { Column } from '@/types'
 
 const FETCH_SIZE = 500

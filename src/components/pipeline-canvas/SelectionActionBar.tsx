@@ -1,16 +1,19 @@
-import { GitMerge, Layers, Trash2 } from 'lucide-react'
+import GitMerge from 'lucide-react/dist/esm/icons/git-merge'
+import Layers from 'lucide-react/dist/esm/icons/layers'
+import Trash2 from 'lucide-react/dist/esm/icons/trash-2'
 import { usePipeline } from '@/lib/pipeline'
-import { useDialogStore, usePipelineStore } from '@/stores'
-import type { Dataset } from '@/types'
+import { useHydratedNodes } from '@/lib/pipeline/hooks/useHydratedNodes'
+import { useDialogStore } from '@/stores/dialogStore'
+import { usePipelineStore } from '@/stores/pipelineStore'
 
 interface SelectionActionBarProps {
   selectedNodeIds: string[]
 }
 
 export function SelectionActionBar({ selectedNodeIds }: SelectionActionBarProps) {
-  const nodes = usePipelineStore((s) => s.nodes)
+  const nodes = useHydratedNodes()
   const getNodeChildren = usePipelineStore((s) => s.getNodeChildren)
-  const { openDialog } = useDialogStore()
+  const openDialog = useDialogStore((s) => s.openDialog)
   const { deleteNode } = usePipeline()
 
   // Need at least 2 nodes for any action
@@ -28,7 +31,7 @@ export function SelectionActionBar({ selectedNodeIds }: SelectionActionBarProps)
     if (!n) return false
     if (n.type !== 'dataset' && n.type !== 'view') return false
     if (n.rowCount === 0) return false
-    if (n.type === 'dataset' && (n as Dataset).isPlaceholder) return false
+    if (n.type === 'dataset' && n.isPlaceholder) return false
     return true
   })
 

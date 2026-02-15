@@ -1,4 +1,7 @@
-import { AlertCircle, Database, FilterX, SearchX } from 'lucide-react'
+import AlertCircle from 'lucide-react/dist/esm/icons/alert-circle'
+import Database from 'lucide-react/dist/esm/icons/database'
+import FilterX from 'lucide-react/dist/esm/icons/filter-x'
+import SearchX from 'lucide-react/dist/esm/icons/search-x'
 
 type EmptyStateType = 'no-data' | 'filtered-empty' | 'search-empty' | 'error'
 

@@ -33,5 +33,5 @@ benchmarks/.data/
 
 *.claude
 .claude/
-
+.agents/
 

@@ -1,9 +1,12 @@
-import { FileSpreadsheet } from 'lucide-react'
+import FileSpreadsheet from 'lucide-react/dist/esm/icons/file-spreadsheet'
 import { memo } from 'react'
 import { getOperationUiMeta, type OperationUiMeta } from '@/lib/operations/registry'
+import { openOperationEditor } from '@/lib/operations/ui'
 import { getOperationSummary } from '@/lib/pipeline/operation-summary'
-import { useDialogStore, usePanelStore, usePivotStore } from '@/stores'
-import type { Dataset, DataView, JoinOperation, PivotOperation } from '@/types'
+import { useDialogStore } from '@/stores/dialogStore'
+import { usePanelStore } from '@/stores/panelStore'
+import { usePivotStore } from '@/stores/pivotStore'
+import type { Dataset, DataView, JoinOperation } from '@/types'
 
 type ChipColor = OperationUiMeta['color']
 
@@ -58,9 +61,11 @@ interface OperationChipProps {
 }
 
 export const OperationChip = memo(function OperationChip({ node, isActive, onClick }: OperationChipProps) {
-  const { setFilterEditor, openPivotPanel, openSqlPanelForNode } = usePanelStore()
-  const { openDialog } = useDialogStore()
-  const { loadFromOperation } = usePivotStore()
+  const setFilterEditor = usePanelStore((s) => s.setFilterEditor)
+  const openPivotPanel = usePanelStore((s) => s.openPivotPanel)
+  const openSqlPanelForNode = usePanelStore((s) => s.openSqlPanelForNode)
+  const openDialog = useDialogStore((s) => s.openDialog)
+  const loadFromOperation = usePivotStore((s) => s.loadFromOperation)
 
   // Dataset chip
   if (node.type === 'dataset') {
@@ -102,19 +107,13 @@ export const OperationChip = memo(function OperationChip({ node, isActive, onCli
 
   const handleEdit = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (view.operation.type === 'filter') {
-      setFilterEditor(true)
-    } else if (view.operation.type === 'pivot') {
-      loadFromOperation(view.operation as PivotOperation)
-      const parentId = view.parentIds[0]
-      if (parentId) {
-        openPivotPanel(parentId, view.id)
-      }
-    } else if (view.operation.type === 'sql') {
-      openSqlPanelForNode(view.id)
-    } else if (view.operation.type === 'union') {
-      openDialog({ type: 'union', preSelectedNodes: [], editingNodeId: view.id })
-    }
+    openOperationEditor(view, uiMeta, {
+      setFilterEditor,
+      openPivotPanel,
+      openSqlPanelForNode,
+      openDialog,
+      loadPivotFromOperation: loadFromOperation,
+    })
   }
 
   return (

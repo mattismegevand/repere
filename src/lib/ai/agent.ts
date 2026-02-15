@@ -1,10 +1,12 @@
 import type { DuckDBClient } from '@/lib/duckdb/interface'
+import { validateToolCall } from '@/lib/operations'
 import type { ColumnStats } from '@/lib/profiling'
-import type { ChatMessage, LLMMessage, LLMToolCall, StepOperation } from '@/types/ai'
+import type { AgentPlan, ChatMessage, LLMMessage, LLMToolCall, PlannedStep, StepOperation } from '@/types/ai'
 import type { ChartConfig, ExportConfig, PipelineNode, ViewOperation } from '@/types/pipeline'
 import { buildAgentContext, serializeContextForPrompt } from './context'
+import { formatValidationError } from './error-formatter'
 import { createAssistantMessage, createToolResultMessage, LLMClient } from './llm-client'
-import { AGENT_SYSTEM_PROMPT } from './prompts'
+import { AGENT_SYSTEM_PROMPT, PLAN_SYSTEM_PROMPT } from './prompts'
 import { operationTools } from './tools'
 
 const MAX_ITERATIONS = 15
@@ -232,6 +234,24 @@ export class Agent {
           const description = describeOperation(stepOp)
           onStatus(`Executing: ${description}`)
 
+          // Pre-validate view operations before execution
+          if (stepOp.kind === 'view') {
+            const targetNode = stepOp.targetNodeId ? getNodes()[stepOp.targetNodeId] : getActiveNode()
+            const columns = targetNode?.columns ?? []
+
+            const validation = validateToolCall(toolCall.name, toolCall.arguments, columns, getNodes())
+
+            if (!validation.valid) {
+              const errorResult = formatValidationError(validation.errors, validation.warnings, {
+                columns,
+                nodes: getNodes(),
+              })
+              messages.push(createToolResultMessage(toolCall.id, errorResult))
+              onStepComplete(description, false, validation.errors.join('; '))
+              continue // Let LLM retry with corrected args
+            }
+          }
+
           // Execute the operation
           let result: { success: boolean; message: string; nodeId?: string }
 
@@ -265,13 +285,17 @@ export class Agent {
         // Update context for next iteration (schema may have changed)
         const newActiveNode = getActiveNode()
         if (newActiveNode) {
-          // Build context update with progress summary
+          // Build progress summary
           const progressSummary =
             completedSteps.length > 0 ? `## Progress So Far\n${completedSteps.join('\n')}\n\n` : ''
 
+          // Rebuild full context with refresh tier (includes updated schema and sample data)
+          const refreshedContext = await buildAgentContext(client, newActiveNode, getNodes(), columnStats)
+          const refreshedContextString = serializeContextForPrompt(refreshedContext, { tier: 'refresh' })
+
           messages.push({
             role: 'user',
-            content: `${progressSummary}## Current State\nNode: ${newActiveNode.name}\nColumns: ${newActiveNode.columns.map((c) => c.name).join(', ')}\nRows: ${newActiveNode.rowCount ?? 'unknown'}\n\n## Original Goal\n${goal}\n\nWhat's the next step? If the goal is fully achieved, respond with a summary (no tool calls).`,
+            content: `${progressSummary}## Updated Context\n${refreshedContextString}\n\n## Original Goal\n${goal}\n\nWhat's the next step? If the goal is fully achieved, respond with a summary (no tool calls).`,
           })
         }
 
@@ -284,5 +308,112 @@ export class Agent {
     }
 
     return { success: false, message: 'Max iterations reached' }
+  }
+
+  /**
+   * Generate a plan without executing - returns structured AgentPlan for review
+   */
+  async plan(
+    goal: string,
+    client: DuckDBClient,
+    columnStats: ColumnStats[],
+    getActiveNode: () => PipelineNode | null,
+    getNodes: () => Record<string, PipelineNode>
+  ): Promise<{ success: boolean; plan?: AgentPlan; error?: string }> {
+    const activeNode = getActiveNode()
+    if (!activeNode) {
+      return { success: false, error: 'No active node selected' }
+    }
+
+    const context = await buildAgentContext(client, activeNode, getNodes(), columnStats)
+    const contextString = serializeContextForPrompt(context)
+
+    const messages: LLMMessage[] = [
+      { role: 'system', content: PLAN_SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: `## Context\n${contextString}\n\n## User Request\n${goal}\n\nCreate a step-by-step plan to accomplish this goal. Return the plan as JSON.`,
+      },
+    ]
+
+    try {
+      const response = await this.client.chat(messages, {})
+
+      // Parse the plan from the response
+      const content = response.content || ''
+      const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/)
+
+      if (!jsonMatch) {
+        return { success: false, error: 'Could not parse plan from response' }
+      }
+
+      const planData = JSON.parse(jsonMatch[1]) as {
+        summary: string
+        steps: Array<{ description: string; toolName: string; arguments: Record<string, unknown> }>
+      }
+
+      // Convert to AgentPlan format
+      const steps: PlannedStep[] = planData.steps.map((step, index) => {
+        const operation = this.parseStepToOperation(step.toolName, step.arguments)
+        return {
+          id: `step-${index}-${Date.now()}`,
+          description: step.description,
+          operation,
+          status: 'pending' as const,
+        }
+      })
+
+      const plan: AgentPlan = {
+        id: `plan-${Date.now()}`,
+        goal,
+        steps,
+        status: 'pending',
+      }
+
+      return { success: true, plan }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Unknown error' }
+    }
+  }
+
+  /**
+   * Convert tool name and arguments to StepOperation
+   */
+  private parseStepToOperation(toolName: string, args: Record<string, unknown>): StepOperation {
+    const targetNodeId = args.targetNodeId as string | undefined
+
+    if (toolName === 'createChart') {
+      return {
+        kind: 'chart',
+        config: {
+          chartType: args.chartType as ChartConfig['chartType'],
+          title: args.title as string | undefined,
+          xAxis: args.xAxis as ChartConfig['xAxis'],
+          yAxis: args.yAxis as ChartConfig['yAxis'],
+          colorBy: args.colorBy as string | undefined,
+          aggregation: args.aggregation as ChartConfig['aggregation'],
+        },
+        targetNodeId,
+      }
+    }
+
+    if (toolName === 'createExport') {
+      return {
+        kind: 'export',
+        config: {
+          format: args.format as ExportConfig['format'],
+          filename: args.filename as string | undefined,
+        },
+        targetNodeId,
+      }
+    }
+
+    // View operation
+    const { targetNodeId: _, ...rest } = args
+    return {
+      kind: 'view',
+      operation: { type: toolName, ...rest } as ViewOperation,
+      targetNodeId,
+    }
   }
 }

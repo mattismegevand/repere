@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createJSONStorage } from 'zustand/middleware'
-import { usePanelStore, useThemeStore } from '@/stores'
+import { usePanelStore } from '../../../src/stores/panelStore'
+import { useThemeStore } from '../../../src/stores/themeStore'
 
 const memoryStorage = (() => {
   const store = new Map<string, string>()

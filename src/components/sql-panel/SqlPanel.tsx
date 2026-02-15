@@ -3,15 +3,23 @@ import { sql } from '@codemirror/lang-sql'
 import { Prec } from '@codemirror/state'
 import { type KeyBinding, keymap } from '@codemirror/view'
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror'
-import { AlignLeft, Clipboard, History, Play, Plus, RotateCcw, Save, X } from 'lucide-react'
+import AlignLeft from 'lucide-react/dist/esm/icons/align-left'
+import Clipboard from 'lucide-react/dist/esm/icons/clipboard'
+import History from 'lucide-react/dist/esm/icons/history'
+import Play from 'lucide-react/dist/esm/icons/play'
+import Plus from 'lucide-react/dist/esm/icons/plus'
+import RotateCcw from 'lucide-react/dist/esm/icons/rotate-ccw'
+import Save from 'lucide-react/dist/esm/icons/save'
+import X from 'lucide-react/dist/esm/icons/x'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { format } from 'sql-formatter'
 import { useDuckDB } from '@/lib/duckdb'
 import { escapeIdentifier } from '@/lib/duckdb/sql-builder'
 import { createSqlQueryView, dropView, getViewRowCount, getViewSchema } from '@/lib/duckdb/view-manager'
-import { usePanelStore, useThemeStore } from '@/stores'
+import { usePanelStore } from '@/stores/panelStore'
 import { getDescendants, usePipelineStore } from '@/stores/pipelineStore'
 import { useSqlStore } from '@/stores/sqlStore'
+import { useThemeStore } from '@/stores/themeStore'
 import { getEffectiveColorScheme } from '@/themes'
 import type { DataView, SqlQueryOperation } from '@/types'
 import { ResultGrid } from './ResultGrid'
@@ -30,8 +38,13 @@ export function SqlPanel() {
   const theme = useThemeStore((s) => s.theme)
   const structureStyle = useThemeStore((s) => s.structureStyle)
   const isClassic = structureStyle === 'classic'
-  const { nodes, edges, activeNodeId, addView, updateView } = usePipelineStore()
-  const { addToHistory, history } = useSqlStore()
+  const nodes = usePipelineStore((s) => s.nodes)
+  const edges = usePipelineStore((s) => s.edges)
+  const activeNodeId = usePipelineStore((s) => s.activeNodeId)
+  const addView = usePipelineStore((s) => s.addView)
+  const updateView = usePipelineStore((s) => s.updateView)
+  const addToHistory = useSqlStore((s) => s.addToHistory)
+  const history = useSqlStore((s) => s.history)
   const [query, setQuery] = useState('')
   const [executing, setExecuting] = useState(false)
   const [creating, setCreating] = useState(false)

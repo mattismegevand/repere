@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { X } from 'lucide-react'
+import X from 'lucide-react/dist/esm/icons/x'
 import type { ReactNode } from 'react'
 
 type DialogWidth = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl'

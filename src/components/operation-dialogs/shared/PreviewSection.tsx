@@ -28,7 +28,7 @@ export function PreviewSection({
           <span className="text-[10px] font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
             Preview
           </span>
-          {loading && <span className="text-[10px] text-[var(--color-text-muted)]">Loading...</span>}
+          {loading ? <span className="text-[10px] text-[var(--color-text-muted)]">Loading...</span> : null}
           {!loading && !error && (
             <span className="text-[10px] text-[var(--color-text-muted)]">
               {totalCount.toLocaleString()} row{totalCount !== 1 ? 's' : ''}

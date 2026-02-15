@@ -1,12 +1,17 @@
-import { ChevronDown, ChevronRight, Plus, X } from 'lucide-react'
+import ChevronDown from 'lucide-react/dist/esm/icons/chevron-down'
+import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right'
+import Plus from 'lucide-react/dist/esm/icons/plus'
+import X from 'lucide-react/dist/esm/icons/x'
 import { useEffect, useMemo, useState } from 'react'
 import { InlineTablePreview, PreviewSection } from '@/components/operation-dialogs/shared'
 import { Button, DialogErrorBanner } from '@/components/ui'
 import { RadixDialog } from '@/components/ui/RadixDialog'
 import { useDuckDB } from '@/lib/duckdb'
 import { useOperationDialog } from '@/lib/hooks/useOperationDialog'
+import { useHydratedNodes } from '@/lib/pipeline/hooks/useHydratedNodes'
+import type { HydratedNode } from '@/lib/pipeline/hydration'
 import { usePipeline } from '@/lib/pipeline/usePipeline'
-import { useDialogStore, usePipelineStore } from '@/stores'
+import { useDialogStore } from '@/stores/dialogStore'
 import { isTerminalNode, type JoinCondition, type JoinOperation } from '@/types'
 
 type JoinType = 'inner' | 'left' | 'right' | 'full' | 'cross'
@@ -153,8 +158,8 @@ function buildJoinPreviewSql(
 }
 
 export function JoinDialog({ onClose }: Props) {
-  const { nodes } = usePipelineStore()
-  const { activeDialog } = useDialogStore()
+  const nodes = useHydratedNodes()
+  const activeDialog = useDialogStore((s) => s.activeDialog)
   const { applyJoin, openTab } = usePipeline()
   const { client } = useDuckDB()
 
@@ -163,7 +168,13 @@ export function JoinDialog({ onClose }: Props) {
   const joinPreSelectedRight = activeDialog?.type === 'join' ? activeDialog.preSelectedRight : undefined
 
   // Get all nodes that can be joined (datasets and views, not terminal nodes)
-  const nodeList = useMemo(() => Object.values(nodes).filter((n) => !isTerminalNode(n)), [nodes])
+  const nodeList = useMemo(
+    () =>
+      Object.values(nodes).filter(
+        (n): n is HydratedNode => !isTerminalNode(n) && !!n.tableName && !!n.columns && n.columns.length > 0
+      ),
+    [nodes]
+  )
 
   // Initialize with pre-selected values or first two nodes
   const [leftId, setLeftId] = useState<string>(() => {
@@ -216,6 +227,7 @@ export function JoinDialog({ onClose }: Props) {
     if (!conditions.every((c) => c.leftColumn && c.rightColumn)) return null
     if (joinType !== 'cross' && conditions.some((c) => c.operator === 'BETWEEN' && !c.secondaryValue)) return null
 
+    if (!leftNode.tableName || !rightNode.tableName) return null
     return buildJoinPreviewSql(leftNode.tableName, rightNode.tableName, joinType, conditions, combineMode)
   }, [leftNode, rightNode, leftId, rightId, joinType, conditions, combineMode])
 
@@ -360,7 +372,7 @@ export function JoinDialog({ onClose }: Props) {
               >
                 {nodeList.map((node) => (
                   <option key={node.id} value={node.id}>
-                    {node.name} ({node.columns.length} cols · {node.rowCount?.toLocaleString() ?? '?'} rows)
+                    {node.name} ({node.columns?.length ?? 0} cols · {node.rowCount?.toLocaleString() ?? '?'} rows)
                   </option>
                 ))}
               </select>
@@ -376,7 +388,7 @@ export function JoinDialog({ onClose }: Props) {
               >
                 {nodeList.map((node) => (
                   <option key={node.id} value={node.id}>
-                    {node.name} ({node.columns.length} cols · {node.rowCount?.toLocaleString() ?? '?'} rows)
+                    {node.name} ({node.columns?.length ?? 0} cols · {node.rowCount?.toLocaleString() ?? '?'} rows)
                   </option>
                 ))}
               </select>

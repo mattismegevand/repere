@@ -1,4 +1,4 @@
-import { ArrowDownUp } from 'lucide-react'
+import ArrowDownUp from 'lucide-react/dist/esm/icons/arrow-down-up'
 import { buildOrderByClause, escapeIdentifier } from '@/lib/duckdb/sql-builder/utils'
 import type { ToolDefinition } from '@/types/ai'
 import type { Column } from '@/types/dataset'

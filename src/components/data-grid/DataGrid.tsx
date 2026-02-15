@@ -1,19 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useDuckDB } from '@/lib/duckdb'
-import { useFilterApply } from '@/lib/hooks/useFilterApply'
-import { usePipeline } from '@/lib/pipeline/usePipeline'
 import {
   selectSelectedCol,
   selectSelectedRow,
-  useDialogStore,
   useGridEditingStore,
   useGridSelectionStore,
   useGridUIStore,
-  usePanelStore,
-  useQueryStore,
-  useThemeStore,
-} from '@/stores'
-import type { DataView } from '@/types'
+} from '@/components/data-grid/stores'
+import { useDuckDB } from '@/lib/duckdb'
+import { useFilterApply } from '@/lib/hooks/useFilterApply'
+import { usePipeline } from '@/lib/pipeline/usePipeline'
+import { useDialogStore } from '@/stores/dialogStore'
+import { usePanelStore } from '@/stores/panelStore'
+import { useQueryStore } from '@/stores/queryStore'
+import { useThemeStore } from '@/stores/themeStore'
 import { useColumnStats } from './charts'
 import { GridActionsProvider } from './context'
 import { DataGridProvider, ROW_HEIGHT } from './DataGridProvider'
@@ -75,18 +74,20 @@ export function DataGrid() {
   // Use individual selectors for data to avoid unnecessary re-renders
   const search = useQueryStore((s) => s.search)
   const searchCaseSensitive = useQueryStore((s) => s.searchCaseSensitive)
-  // Actions are stable references, can destructure
-  const { setSearch, reset: resetQuery } = useQueryStore()
+  const setSearch = useQueryStore((s) => s.setSearch)
+  const resetQuery = useQueryStore((s) => s.reset)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [rowJumpValue, setRowJumpValue] = useState<string | null>(null)
   const rowJumpInputRef = useRef<HTMLInputElement>(null)
+  const activeColumns = activeNode?.columns ?? []
+  const activeTableName = activeNode?.tableName ?? ''
 
   // Data fetching hook
   // Use viewSql as cacheKey for views - it changes whenever the operation changes
-  const viewCacheKey = activeNode?.type === 'view' ? (activeNode as DataView).viewSql : undefined
+  const viewCacheKey = activeNode?.type === 'view' ? activeNode.viewSql : undefined
   const { totalCount, getRow, prefetchRange, getSampleRows, invalidateCache } = useGridData({
     tableName: activeNode?.tableName,
-    columns: activeNode?.columns ?? [],
+    columns: activeColumns,
     search,
     searchCaseSensitive,
     cacheKey: viewCacheKey,
@@ -112,8 +113,8 @@ export function DataGrid() {
     setAllColumnSizes,
     getColumnSize,
   } = useColumnState({
-    columns: activeNode?.columns ?? [],
-    storageKey: activeNode?.tableName,
+    columns: activeColumns,
+    storageKey: activeTableName,
   })
 
   // Cell editing state from store
@@ -162,8 +163,8 @@ export function DataGrid() {
   // Extended column stats for header sparklines
   const { getStats: getSparklineStats, prefetchAll: prefetchSparklineStats } = useColumnStats(
     client,
-    activeNode?.tableName ?? '',
-    activeNode?.columns ?? []
+    activeTableName,
+    activeColumns
   )
 
   // Prefetch sparkline stats when sparklines are enabled
@@ -171,7 +172,7 @@ export function DataGrid() {
     if (showSparklines && activeNode) {
       prefetchSparklineStats()
     }
-  }, [showSparklines, activeNode?.tableName, prefetchSparklineStats])
+  }, [showSparklines, activeTableName, prefetchSparklineStats])
 
   const parentRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -315,14 +316,12 @@ export function DataGrid() {
   // Use individual selectors for data to avoid unnecessary re-renders
   const numberFormat = useThemeStore((s) => s.numberFormat)
   const columnNumberFormats = useThemeStore((s) => s.columnNumberFormats)
-  const {
-    saveScrollPosition: saveScroll,
-    setFilterEditor,
-    setCanvasMode,
-    openChartPanel,
-    openCommandPalette,
-  } = usePanelStore()
-  const { openDialog } = useDialogStore()
+  const saveScroll = usePanelStore((s) => s.saveScrollPosition)
+  const setFilterEditor = usePanelStore((s) => s.setFilterEditor)
+  const setCanvasMode = usePanelStore((s) => s.setCanvasMode)
+  const openChartPanel = usePanelStore((s) => s.openChartPanel)
+  const openCommandPalette = usePanelStore((s) => s.openCommandPalette)
+  const openDialog = useDialogStore((s) => s.openDialog)
 
   // Pre-compute merged formats to avoid creating new objects on every getFormat call
   const mergedFormats = useMemo(() => {
@@ -364,7 +363,7 @@ export function DataGrid() {
         return
       }
 
-      const currentOrder = activeNode.columns.map((c) => c.name)
+      const currentOrder = activeColumns.map((c) => c.name)
       const dragIndex = currentOrder.indexOf(draggedColumn)
       const dropIndex = currentOrder.indexOf(targetColName)
 
@@ -386,7 +385,7 @@ export function DataGrid() {
         order: newOrder,
       })
     },
-    [activeNode, applyOrReplaceOperation]
+    [activeColumns, activeNode, applyOrReplaceOperation]
   )
 
   // Get current filters from the active view's operation
@@ -431,7 +430,7 @@ export function DataGrid() {
   useColumnOutlierStats({
     client,
     tableName: activeNode?.tableName,
-    columns: activeNode?.columns,
+    columns: activeColumns,
     setColumnStats,
   })
 
@@ -493,7 +492,7 @@ export function DataGrid() {
 
     const newSizes: Record<string, number> = {}
 
-    for (const col of activeNode.columns) {
+    for (const col of activeColumns) {
       const typeLabel = col.type.toUpperCase()
       const headerText = `${col.name} [${typeLabel}]`
       let maxWidth = ctx.measureText(headerText).width
@@ -508,7 +507,7 @@ export function DataGrid() {
     }
 
     setAllColumnSizes(newSizes)
-  }, [activeNode, getSampleRows, getFormat, setAllColumnSizes])
+  }, [activeColumns, activeNode, getSampleRows, getFormat, setAllColumnSizes])
 
   // Key by column names, not array reference, to avoid thrashing when columns haven't changed
   const columnNamesKey = visibleColumns.map((c) => c.name).join(',')
@@ -560,7 +559,7 @@ export function DataGrid() {
   return (
     <div className="flex flex-col h-full">
       <GridToolbar
-        columns={activeNode.columns}
+        columns={activeColumns}
         totalCount={totalCount}
         currentSorts={currentSorts}
         onSortChipClick={handleSortChipClick}
@@ -575,7 +574,7 @@ export function DataGrid() {
         <FilterBar
           filters={currentFilters}
           filterExpression={filterExpression}
-          columns={activeNode.columns}
+          columns={activeColumns}
           combineMode={filterCombineMode}
           isComplex={filterIsComplex}
           filterCount={filterCount}
@@ -600,7 +599,7 @@ export function DataGrid() {
 
       <div ref={containerRef} className="flex-1 relative">
         <DataGridProvider
-          columns={activeNode.columns}
+          columns={activeColumns}
           visibleColumns={visibleColumns}
           pinnedCols={pinnedCols}
           scrollableCols={scrollableCols}
@@ -623,7 +622,7 @@ export function DataGrid() {
           <div
             ref={parentRef}
             role="grid"
-            aria-label={`Data grid for ${activeNode.tableName}`}
+            aria-label={`Data grid for ${activeTableName || activeNode.name}`}
             aria-rowcount={totalCount + 1}
             aria-colcount={visibleColumns.length + 1}
             tabIndex={0}
@@ -634,7 +633,7 @@ export function DataGrid() {
             <div style={{ width: totalWidth, minWidth: '100%' }}>
               <GridHeader
                 client={client}
-                tableName={activeNode.tableName}
+                tableName={activeTableName}
                 currentSorts={currentSorts}
                 activeFilterColumns={activeFilterColumns}
                 getSparklineStats={getSparklineStats}
@@ -687,7 +686,7 @@ export function DataGrid() {
       {filterColumn?.position && (
         <FilterColumnPopup
           filterColumn={{ column: filterColumn.column, position: filterColumn.position }}
-          columns={activeNode.columns}
+          columns={activeColumns}
           onClose={() => setFilterColumn(null)}
         />
       )}
@@ -703,7 +702,7 @@ export function DataGrid() {
         />
       )}
 
-      {imagePreviewUrl && <ImagePreviewModal url={imagePreviewUrl} onClose={() => setImagePreviewUrl(null)} />}
+      {imagePreviewUrl ? <ImagePreviewModal url={imagePreviewUrl} onClose={() => setImagePreviewUrl(null)} /> : null}
     </div>
   )
 }

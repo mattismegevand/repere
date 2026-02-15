@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { NumberFormat } from '@/stores'
+import type { NumberFormat } from '@/stores/themeStore'
 import type { Column } from '@/types'
 import {
   type ColumnStat,

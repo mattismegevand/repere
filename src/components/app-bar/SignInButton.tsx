@@ -1,5 +1,6 @@
 import { useAuth } from '@workos-inc/authkit-react'
-import { LogIn, LogOut } from 'lucide-react'
+import LogIn from 'lucide-react/dist/esm/icons/log-in'
+import LogOut from 'lucide-react/dist/esm/icons/log-out'
 
 // Only render if WorkOS is configured
 const isWorkOSConfigured = !!import.meta.env.VITE_WORKOS_CLIENT_ID

@@ -1,4 +1,4 @@
-import { Replace } from 'lucide-react'
+import Replace from 'lucide-react/dist/esm/icons/replace'
 import { escapeIdentifier, escapeValue } from '@/lib/duckdb/sql-builder/utils'
 import type { ToolDefinition } from '@/types/ai'
 import type { Column } from '@/types/dataset'

@@ -1,7 +1,8 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { ChevronRight } from 'lucide-react'
+import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right'
 import { useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useGridColumnStore, useGridUIStore } from '@/components/data-grid/stores'
 import {
   DATE_BUCKET_LABELS,
   DATE_DIFF_LABELS,
@@ -13,7 +14,7 @@ import {
   supportsBucketing,
   supportsTimeExtraction,
 } from '@/lib/date-helpers'
-import { useGridColumnStore, useGridUIStore, useThemeStore } from '@/stores'
+import { useThemeStore } from '@/stores/themeStore'
 import type { Column } from '@/types'
 import { useGridActions } from './context'
 
@@ -165,7 +166,7 @@ export function ColumnHeaderMenu() {
           <div className="h-px bg-[var(--color-border)] my-1" />
           <div className="px-3 py-1.5 text-xs text-[var(--color-text-muted)] flex justify-between">
             <span>Number format</span>
-            {hasNumberFormatOverride && <span className="text-[var(--color-accent)]">•</span>}
+            {hasNumberFormatOverride ? <span className="text-[var(--color-accent)]">•</span> : null}
           </div>
           <div className="px-2 py-1 flex items-center justify-between text-xs">
             <span>Decimals</span>

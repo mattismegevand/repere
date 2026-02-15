@@ -31,8 +31,8 @@ export function useConvexSync(sessionId: Id<'sessions'> | null) {
     if (!sessionId || !remoteNodes || !remoteEdges) return
 
     // Create fingerprints to detect actual changes
-    const nodesFingerprint = JSON.stringify(remoteNodes.map((n) => [n.nodeId, n.updatedAt]).sort())
-    const edgesFingerprint = JSON.stringify(remoteEdges.map((e) => e.edgeId).sort())
+    const nodesFingerprint = JSON.stringify([...remoteNodes.map((n) => [n.nodeId, n.updatedAt])].sort())
+    const edgesFingerprint = JSON.stringify([...remoteEdges.map((e) => e.edgeId)].sort())
 
     // Skip if nothing changed
     if (nodesFingerprint === lastSyncedNodes.current && edgesFingerprint === lastSyncedEdges.current) {

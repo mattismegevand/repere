@@ -1,8 +1,12 @@
 import { useCallback } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useCacheManagerOptional } from '@/lib/cache'
 import { generateId } from '@/lib/id'
-import { useDialogStore } from '@/stores'
+import { useDialogStore } from '@/stores/dialogStore'
+import { usePipelineLayoutStore } from '@/stores/pipelineLayoutStore'
+import { usePipelineRuntimeStore } from '@/stores/pipelineRuntimeStore'
 import { getParents, usePipelineStore } from '@/stores/pipelineStore'
+import { usePipelineUiStore } from '@/stores/pipelineUiStore'
 import type {
   ChartConfig,
   ChartNode,
@@ -22,13 +26,38 @@ import type {
   UnionOperation,
 } from '@/types'
 import { isTerminalNode } from '@/types/pipeline'
+import type { NodeLayout } from '@/types/pipelineLayout'
+import type { NodeRuntime } from '@/types/pipelineRuntime'
 import { mergeOperations } from '../merge-operations'
 import { usePipelineServiceOptional } from '../PipelineProvider'
 
 export function useViewOperations() {
   const service = usePipelineServiceOptional()
-  const store = usePipelineStore()
+  const store = usePipelineStore(
+    useShallow((s) => ({
+      addChartNode: s.addChartNode,
+      addExportNode: s.addExportNode,
+      addView: s.addView,
+      captureSnapshot: s.captureSnapshot,
+      cascadeDelete: s.cascadeDelete,
+      clearRedo: s.clearRedo,
+      getNode: s.getNode,
+      getNodeChildren: s.getNodeChildren,
+      getNodeDescendants: s.getNodeDescendants,
+      pushUndo: s.pushUndo,
+      pushUndoAndClearRedo: s.pushUndoAndClearRedo,
+      restoreSnapshot: s.restoreSnapshot,
+      setNodeParents: s.setNodeParents,
+      updateChartNode: s.updateChartNode,
+      updateExportNode: s.updateExportNode,
+      updateView: s.updateView,
+    }))
+  )
+  const bumpDataVersion = usePipelineUiStore((s) => s.bumpDataVersion)
   const cacheManager = useCacheManagerOptional()
+
+  const getRuntime = useCallback((nodeId: string) => usePipelineRuntimeStore.getState().nodes[nodeId], [])
+  const getLayout = useCallback((nodeId: string) => usePipelineLayoutStore.getState().nodes[nodeId], [])
 
   const applyOperation = useCallback(
     async (sourceNodeId: string, operation: Operation, additionalSourceIds?: string[]): Promise<DataView | null> => {
@@ -36,34 +65,49 @@ export function useViewOperations() {
 
       const sourceNode = store.getNode(sourceNodeId)
       if (!sourceNode) return null
+      const sourceRuntime = getRuntime(sourceNodeId)
+      if (!sourceRuntime?.tableName || !sourceRuntime.columns) return null
 
       try {
-        const additionalSources: Record<string, { node: typeof sourceNode }> | undefined = additionalSourceIds
-          ? additionalSourceIds.reduce(
-              (acc, id) => {
-                const node = store.getNode(id)
-                if (node) acc[id] = { node }
-                return acc
-              },
-              {} as Record<string, { node: typeof sourceNode }>
-            )
-          : undefined
+        const additionalSources: Record<string, { node: typeof sourceNode; runtime: NodeRuntime }> | undefined =
+          additionalSourceIds
+            ? additionalSourceIds.reduce(
+                (acc, id) => {
+                  const node = store.getNode(id)
+                  const runtime = getRuntime(id)
+                  if (node && runtime?.tableName && runtime.columns) {
+                    acc[id] = { node, runtime }
+                  }
+                  return acc
+                },
+                {} as Record<string, { node: typeof sourceNode; runtime: NodeRuntime }>
+              )
+            : undefined
 
         const children = store.getNodeChildren(sourceNodeId)
         const yOffset = children.length * 80
+        const sourceLayout = getLayout(sourceNodeId)
+        const basePosition = sourceLayout?.position ?? { x: 100, y: 100 }
         const position = {
-          x: sourceNode.position.x + 350,
-          y: sourceNode.position.y + yOffset,
+          x: basePosition.x + 350,
+          y: basePosition.y + yOffset,
         }
 
-        const view = await service.createView(sourceNode, operation, additionalSources, position)
-        store.addView(view)
+        const { view, runtime, parentIds } = await service.createView(
+          { node: sourceNode, runtime: sourceRuntime },
+          operation,
+          additionalSources
+        )
+        const layout: NodeLayout = { position }
+        store.addView(view, parentIds, runtime, layout)
 
         // Fetch row count (createView returns null for async fetch)
-        const rowCount = await service.getViewRowCount(view.tableName)
-        store.updateView(view.id, { rowCount })
+        const rowCount = runtime.tableName ? await service.getViewRowCount(runtime.tableName) : null
+        if (rowCount !== null) {
+          store.updateView(view.id, { rowCount })
+        }
 
-        return { ...view, rowCount }
+        return view
       } catch (err) {
         console.error('Failed to create view:', err)
         return null
@@ -85,23 +129,25 @@ export function useViewOperations() {
 
       const state = usePipelineStore.getState()
       const descendants = store.getNodeDescendants(viewId)
-      const viewNodes = descendants
-        .map((id) => ({ id, node: store.getNode(id) }))
-        .filter((item): item is { id: string; node: DataView } => item.node?.type === 'view')
+      const viewNodeIds = descendants.filter((id) => store.getNode(id)?.type === 'view')
 
       // Invalidate cache for this node and all descendants
       cacheManager?.invalidateNode(viewId, state.edges)
 
-      if (viewNodes.length === 0) return
+      if (viewNodeIds.length === 0) return
 
       // Fetch all schemas and row counts in parallel, collect updates
-      const updates: Record<string, Partial<DataView>> = {}
+      const updates: Record<string, Partial<DataView> & Partial<NodeRuntime>> = {}
       await Promise.all(
-        viewNodes.map(async ({ id, node }) => {
+        viewNodeIds.map(async (id) => {
           try {
+            const runtime = getRuntime(id)
+            if (!runtime?.tableName) {
+              return
+            }
             const [columns, rowCount] = await Promise.all([
-              service.getViewSchema(node.tableName),
-              service.getViewRowCount(node.tableName),
+              service.getViewSchema(runtime.tableName),
+              service.getViewRowCount(runtime.tableName),
             ])
             updates[id] = { columns, rowCount }
           } catch (err) {
@@ -135,8 +181,13 @@ export function useViewOperations() {
       }
 
       // Check for pending branch edit
-      if (state.pendingBranchEdit && operation.type !== 'filter') {
-        state.enterBranchingMode(state.pendingBranchEdit.viewId, state.pendingBranchEdit.snapshotBefore, operation)
+      const uiState = usePipelineUiStore.getState()
+      if (uiState.pendingBranchEdit && operation.type !== 'filter') {
+        uiState.enterBranchingMode(
+          uiState.pendingBranchEdit.viewId,
+          uiState.pendingBranchEdit.snapshotBefore,
+          operation
+        )
         useDialogStore.getState().openDialog({ type: 'branchDecision' })
         return null
       }
@@ -150,46 +201,58 @@ export function useViewOperations() {
         const parentIds = getParents(targetNodeId, state.edges)
         const parentId = parentIds[0]
         const parentNode = parentId ? state.nodes[parentId] : null
-        if (!parentNode) return null
+        const parentRuntime = parentId ? getRuntime(parentId) : undefined
+        const viewRuntime = getRuntime(view.id)
+        if (!parentNode || !parentRuntime?.tableName || !parentRuntime.columns || !viewRuntime?.tableName) return null
 
         const mergedOperation = mergeOperations(view.operation, operation)
 
         // Extract additional sources for join/union operations
-        let additionalSources: Record<string, { node: typeof parentNode }> | undefined
+        let additionalSources: Record<string, { node: typeof parentNode; runtime: NodeRuntime }> | undefined
         if (mergedOperation.type === 'join') {
           const rightId = (mergedOperation as JoinOperation).rightSourceId
           const rightNode = state.nodes[rightId]
-          if (rightNode) additionalSources = { [rightId]: { node: rightNode } }
+          const rightRuntime = getRuntime(rightId)
+          if (rightNode && rightRuntime?.tableName && rightRuntime.columns) {
+            additionalSources = { [rightId]: { node: rightNode, runtime: rightRuntime } }
+          }
         } else if (mergedOperation.type === 'union') {
           const sourceIds = (mergedOperation as UnionOperation).sourceIds
           additionalSources = sourceIds.reduce(
             (acc, id) => {
               const node = state.nodes[id]
-              if (node) acc[id] = { node }
+              const runtime = getRuntime(id)
+              if (node && runtime?.tableName && runtime.columns) acc[id] = { node, runtime }
               return acc
             },
-            {} as Record<string, { node: typeof parentNode }>
+            {} as Record<string, { node: typeof parentNode; runtime: NodeRuntime }>
           )
         }
 
         try {
-          const updatedView = await service.updateView(view, mergedOperation, parentNode, additionalSources)
+          const updatedView = await service.updateView(
+            view,
+            viewRuntime,
+            mergedOperation,
+            { node: parentNode, runtime: parentRuntime },
+            additionalSources
+          )
 
           // Fetch row count (updateView returns null for async fetch)
-          const rowCount = await service.getViewRowCount(view.tableName)
+          const rowCount = await service.getViewRowCount(viewRuntime.tableName)
 
           usePipelineStore.getState().updateView(view.id, {
             operation: mergedOperation,
-            columns: updatedView.columns,
+            columns: updatedView.runtime.columns,
             rowCount,
-            viewSql: updatedView.viewSql,
+            viewSql: updatedView.runtime.viewSql,
           })
 
           await refreshDescendants(view.id)
 
           state.pushUndoAndClearRedo(snapshot)
 
-          return { ...view, ...updatedView, rowCount }
+          return view
         } catch (err) {
           console.error('Failed to update view:', err)
           return null
@@ -246,13 +309,19 @@ export function useViewOperations() {
         const viewNamesToDelete: string[] = []
 
         if (node.type === 'view') {
-          viewNamesToDelete.push(node.tableName)
+          const runtime = getRuntime(nodeId)
+          if (runtime?.tableName) {
+            viewNamesToDelete.push(runtime.tableName)
+          }
         }
 
         for (const descendantId of descendants) {
           const descendant = store.getNode(descendantId)
           if (descendant?.type === 'view') {
-            viewNamesToDelete.push(descendant.tableName)
+            const runtime = getRuntime(descendantId)
+            if (runtime?.tableName) {
+              viewNamesToDelete.push(runtime.tableName)
+            }
           }
         }
 
@@ -264,7 +333,10 @@ export function useViewOperations() {
         }
 
         if (node.type === 'dataset') {
-          await service.dropDatasetTable(node.tableName)
+          const runtime = getRuntime(nodeId)
+          if (runtime?.tableName) {
+            await service.dropDatasetTable(runtime.tableName)
+          }
         }
 
         store.cascadeDelete(nodeId)
@@ -284,10 +356,12 @@ export function useViewOperations() {
     async (nodeId: string): Promise<DataView | null> => {
       const node = store.getNode(nodeId)
       if (!node) return null
+      const runtime = getRuntime(nodeId)
+      if (!runtime?.columns) return null
 
       const selectOp: SelectOperation = {
         type: 'select',
-        columns: node.columns.map((c) => c.name),
+        columns: runtime.columns.map((c) => c.name),
       }
 
       return applyOperation(nodeId, selectOp)
@@ -302,15 +376,19 @@ export function useViewOperations() {
     (sourceNodeId: string, config: ChartConfig): ChartNode | null => {
       const sourceNode = store.getNode(sourceNodeId)
       if (!sourceNode) return null
+      const sourceRuntime = getRuntime(sourceNodeId)
+      if (!sourceRuntime?.tableName || !sourceRuntime.columns) return null
 
       const snapshot = store.captureSnapshot()
 
       // Calculate position
       const children = store.getNodeChildren(sourceNodeId)
       const yOffset = children.length * 80
+      const sourceLayout = getLayout(sourceNodeId)
+      const basePosition = sourceLayout?.position ?? { x: 100, y: 100 }
       const position = {
-        x: sourceNode.position.x + 350,
-        y: sourceNode.position.y + yOffset,
+        x: basePosition.x + 350,
+        y: basePosition.y + yOffset,
       }
 
       const chartId = generateId('chart')
@@ -318,16 +396,18 @@ export function useViewOperations() {
         id: chartId,
         type: 'chart',
         name: `${sourceNode.name} → ${config.chartType} Chart`,
-        tableName: sourceNode.tableName, // Reference parent's table for queries
-        columns: sourceNode.columns,
-        rowCount: sourceNode.rowCount,
         createdAt: new Date(),
-        position,
-        parentId: sourceNodeId,
         config,
       }
 
-      store.addChartNode(chartNode)
+      const runtime: NodeRuntime = {
+        tableName: sourceRuntime.tableName,
+        columns: sourceRuntime.columns,
+        rowCount: sourceRuntime.rowCount ?? null,
+      }
+      const layout: NodeLayout = { position }
+
+      store.addChartNode(chartNode, sourceNodeId, runtime, layout)
       store.pushUndoAndClearRedo(snapshot)
 
       return chartNode
@@ -342,14 +422,18 @@ export function useViewOperations() {
     (sourceNodeId: string, config: ExportConfig): ExportNode | null => {
       const sourceNode = store.getNode(sourceNodeId)
       if (!sourceNode) return null
+      const sourceRuntime = getRuntime(sourceNodeId)
+      if (!sourceRuntime?.tableName || !sourceRuntime.columns) return null
 
       const snapshot = store.captureSnapshot()
 
       const children = store.getNodeChildren(sourceNodeId)
       const yOffset = children.length * 80
+      const sourceLayout = getLayout(sourceNodeId)
+      const basePosition = sourceLayout?.position ?? { x: 100, y: 100 }
       const position = {
-        x: sourceNode.position.x + 350,
-        y: sourceNode.position.y + yOffset,
+        x: basePosition.x + 350,
+        y: basePosition.y + yOffset,
       }
 
       const exportId = generateId('export')
@@ -357,16 +441,18 @@ export function useViewOperations() {
         id: exportId,
         type: 'export',
         name: `${sourceNode.name} → Export`,
-        tableName: sourceNode.tableName,
-        columns: sourceNode.columns,
-        rowCount: sourceNode.rowCount,
         createdAt: new Date(),
-        position,
-        parentId: sourceNodeId,
         config,
       }
 
-      store.addExportNode(exportNode)
+      const runtime: NodeRuntime = {
+        tableName: sourceRuntime.tableName,
+        columns: sourceRuntime.columns,
+        rowCount: sourceRuntime.rowCount ?? null,
+      }
+      const layout: NodeLayout = { position }
+
+      store.addExportNode(exportNode, sourceNodeId, runtime, layout)
       store.pushUndoAndClearRedo(snapshot)
 
       return exportNode
@@ -434,40 +520,51 @@ export function useViewOperations() {
         if (node.type === 'view') {
           // For views, regenerate SQL with same operation but new parent
           const view = node as DataView
-          const updatedView = await service.updateView(view, view.operation, newParent)
+          const viewRuntime = getRuntime(nodeId)
+          const parentRuntime = getRuntime(newParentId)
+          if (!viewRuntime?.tableName || !parentRuntime?.tableName || !parentRuntime.columns) return false
+
+          const updatedView = await service.updateView(view, viewRuntime, view.operation, {
+            node: newParent,
+            runtime: parentRuntime,
+          })
 
           // Fetch row count (updateView returns null for async fetch)
-          const rowCount = await service.getViewRowCount(view.tableName)
+          const rowCount = await service.getViewRowCount(viewRuntime.tableName)
 
+          store.setNodeParents(nodeId, [newParentId])
           store.updateView(nodeId, {
-            parentIds: [newParentId],
-            columns: updatedView.columns,
+            columns: updatedView.runtime.columns,
             rowCount,
-            viewSql: updatedView.viewSql,
+            viewSql: updatedView.runtime.viewSql,
           })
 
           // Refresh all descendants since their data may have changed
           await refreshDescendants(nodeId)
         } else if (node.type === 'chart') {
           // For charts, just update the parentId and refresh data references
+          const parentRuntime = getRuntime(newParentId)
+          if (!parentRuntime?.tableName || !parentRuntime.columns) return false
+          store.setNodeParents(nodeId, [newParentId])
           store.updateChartNode(nodeId, {
-            parentId: newParentId,
-            tableName: newParent.tableName,
-            columns: newParent.columns,
-            rowCount: newParent.rowCount,
+            tableName: parentRuntime.tableName,
+            columns: parentRuntime.columns,
+            rowCount: parentRuntime.rowCount ?? null,
           })
         } else if (node.type === 'export') {
           // For exports, update parentId and data references
+          const parentRuntime = getRuntime(newParentId)
+          if (!parentRuntime?.tableName || !parentRuntime.columns) return false
+          store.setNodeParents(nodeId, [newParentId])
           store.updateExportNode(nodeId, {
-            parentId: newParentId,
-            tableName: newParent.tableName,
-            columns: newParent.columns,
-            rowCount: newParent.rowCount,
+            tableName: parentRuntime.tableName,
+            columns: parentRuntime.columns,
+            rowCount: parentRuntime.rowCount ?? null,
           })
         }
 
         store.pushUndoAndClearRedo(snapshot)
-        store.bumpDataVersion()
+        bumpDataVersion()
 
         return true
       } catch (err) {
@@ -477,7 +574,7 @@ export function useViewOperations() {
         return false
       }
     },
-    [service, store, refreshDescendants]
+    [service, store, refreshDescendants, bumpDataVersion]
   )
 
   /**
@@ -495,6 +592,9 @@ export function useViewOperations() {
 
       if (!sourceNode || !targetNode) return null
       if (targetNode.type === 'dataset') return null // Can't insert before a dataset
+      const sourceRuntime = getRuntime(sourceId)
+      const targetRuntime = getRuntime(targetId)
+      if (!sourceRuntime?.tableName || !sourceRuntime.columns) return null
 
       const snapshot = state.captureSnapshot()
 
@@ -510,7 +610,7 @@ export function useViewOperations() {
           }
           case 'sort': {
             // Create a sort with first column if available
-            const firstCol = sourceNode.columns[0]?.name ?? 'id'
+            const firstCol = sourceRuntime.columns[0]?.name ?? 'id'
             const sorts: Sort[] = [{ column: firstCol, direction: 'asc' }]
             operation = { type: 'sort', sorts } as SortOperation
             break
@@ -521,7 +621,7 @@ export function useViewOperations() {
           }
           case 'select': {
             // Select all columns (pass-through)
-            operation = { type: 'select', columns: sourceNode.columns.map((c) => c.name) } as SelectOperation
+            operation = { type: 'select', columns: sourceRuntime.columns.map((c) => c.name) } as SelectOperation
             break
           }
           case 'distinct': {
@@ -541,52 +641,63 @@ export function useViewOperations() {
 
         // Calculate position between source and target
         const position = {
-          x: (sourceNode.position.x + targetNode.position.x) / 2,
-          y: (sourceNode.position.y + targetNode.position.y) / 2,
+          x: (getLayout(sourceId)?.position?.x ?? 100 + (getLayout(targetId)?.position?.x ?? 100)) / 2,
+          y: (getLayout(sourceId)?.position?.y ?? 100 + (getLayout(targetId)?.position?.y ?? 100)) / 2,
         }
 
         // Create the new view
-        const view = await service.createView(sourceNode, operation, undefined, position)
-        store.addView(view)
+        const { view, runtime, parentIds } = await service.createView(
+          { node: sourceNode, runtime: sourceRuntime },
+          operation,
+          undefined
+        )
+        const layout: NodeLayout = { position }
+        store.addView(view, parentIds, runtime, layout)
 
         // Fetch row count for the new view (createView returns null for async fetch)
-        const rowCount = await service.getViewRowCount(view.tableName)
-        store.updateView(view.id, { rowCount })
+        const rowCount = runtime.tableName ? await service.getViewRowCount(runtime.tableName) : null
+        if (rowCount !== null) {
+          store.updateView(view.id, { rowCount })
+        }
 
         // Now rewire the target to use the new view as its parent
         if (targetNode.type === 'view') {
           const targetView = targetNode as DataView
-          const updatedView = await service.updateView(targetView, targetView.operation, view)
+          if (!targetRuntime?.tableName) return null
+          const updatedView = await service.updateView(targetView, targetRuntime, targetView.operation, {
+            node: view,
+            runtime: runtime,
+          })
 
           // Fetch row count for target (updateView returns null for async fetch)
-          const targetRowCount = await service.getViewRowCount(targetView.tableName)
+          const targetRowCount = await service.getViewRowCount(targetRuntime.tableName)
 
+          store.setNodeParents(targetId, [view.id])
           store.updateView(targetId, {
-            parentIds: [view.id],
-            columns: updatedView.columns,
+            columns: updatedView.runtime.columns,
             rowCount: targetRowCount,
-            viewSql: updatedView.viewSql,
+            viewSql: updatedView.runtime.viewSql,
           })
 
           await refreshDescendants(targetId)
         } else if (targetNode.type === 'chart') {
+          store.setNodeParents(targetId, [view.id])
           store.updateChartNode(targetId, {
-            parentId: view.id,
-            tableName: view.tableName,
-            columns: view.columns,
+            tableName: runtime.tableName,
+            columns: runtime.columns,
             rowCount,
           })
         } else if (targetNode.type === 'export') {
+          store.setNodeParents(targetId, [view.id])
           store.updateExportNode(targetId, {
-            parentId: view.id,
-            tableName: view.tableName,
-            columns: view.columns,
+            tableName: runtime.tableName,
+            columns: runtime.columns,
             rowCount,
           })
         }
 
         store.pushUndoAndClearRedo(snapshot)
-        store.bumpDataVersion()
+        bumpDataVersion()
 
         return view.id
       } catch (err) {
@@ -595,7 +706,7 @@ export function useViewOperations() {
         return null
       }
     },
-    [service, store, refreshDescendants]
+    [service, store, refreshDescendants, bumpDataVersion]
   )
 
   /**

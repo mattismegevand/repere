@@ -1,12 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ChevronDown, X } from 'lucide-react'
+import ChevronDown from 'lucide-react/dist/esm/icons/chevron-down'
+import X from 'lucide-react/dist/esm/icons/x'
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { Button, Label, Select } from '@/components/ui'
 import { FormInput } from '@/components/ui/form'
 import { RadixDialog } from '@/components/ui/RadixDialog'
 import { usePipeline } from '@/lib/pipeline/usePipeline'
-import { useDialogStore } from '@/stores'
+import { useDialogStore } from '@/stores/dialogStore'
 import type { WindowFunction, WindowOperation } from '@/types'
 import { type WindowFormValues, windowFormSchema } from './schema'
 
@@ -60,7 +61,8 @@ function generateOutputColumnName(fn: WindowFunction, column?: string): string {
 
 export function WindowDialog() {
   const { activeNode, applyOrReplaceOperation } = usePipeline()
-  const { activeDialog, closeDialog } = useDialogStore()
+  const activeDialog = useDialogStore((s) => s.activeDialog)
+  const closeDialog = useDialogStore((s) => s.closeDialog)
   const windowDialogColumn = activeDialog?.type === 'window' ? activeDialog.column : undefined
   const columns = activeNode?.columns ?? []
 
@@ -202,7 +204,7 @@ export function WindowDialog() {
               </optgroup>
             ))}
           </Select>
-          {fnInfo && <p className="text-[10px] text-[var(--color-text-muted)] mt-1">{fnInfo.description}</p>}
+          {fnInfo ? <p className="text-[10px] text-[var(--color-text-muted)] mt-1">{fnInfo.description}</p> : null}
         </div>
 
         {/* Source column (for functions that need it) */}

@@ -1,6 +1,6 @@
-import { Pin } from 'lucide-react'
+import Pin from 'lucide-react/dist/esm/icons/pin'
 import { memo, useEffect, useRef, useState } from 'react'
-import { useGridUIStore } from '@/stores'
+import { useGridUIStore } from '@/components/data-grid/stores'
 import type { Column } from '@/types'
 import { ColumnFilter } from './ColumnFilter'
 import { ColumnHoverCard } from './ColumnHoverCard'
@@ -268,9 +268,9 @@ export const ColumnHeader = memo(function ColumnHeader({
                 sortInfo ? `Sort ${column.name}, currently ${sortInfo.direction}ending` : `Sort ${column.name}`
               }
             >
-              {!sortInfo && <SortNeutralIcon size={12} />}
-              {sortInfo?.direction === 'asc' && <SortAscIcon size={12} />}
-              {sortInfo?.direction === 'desc' && <SortDescIcon size={12} />}
+              {!sortInfo ? <SortNeutralIcon size={12} /> : null}
+              {sortInfo?.direction === 'asc' ? <SortAscIcon size={12} /> : null}
+              {sortInfo?.direction === 'desc' ? <SortDescIcon size={12} /> : null}
               {sortInfo && totalSorts > 1 && (
                 <span className="text-[9px] ml-0.5 w-3 h-3 flex items-center justify-center rounded-full bg-[var(--color-accent)] text-white font-medium">
                   {sortIndex + 1}
@@ -307,7 +307,7 @@ export const ColumnHeader = memo(function ColumnHeader({
           </div>
         )}
       </div>
-      {isFilterOpen && <ColumnFilter column={column} onClose={() => setFilterColumn(null)} />}
+      {isFilterOpen ? <ColumnFilter column={column} onClose={() => setFilterColumn(null)} /> : null}
       {isHovered && !filterColumn && client && (
         <div
           className={`absolute top-full mt-1 bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-lg shadow-lg ${isPinned ? 'z-30' : 'z-20'} ${hoverCardFlip ? 'right-0' : 'left-0'}`}

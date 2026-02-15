@@ -1,23 +1,32 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { ChevronDown, ChevronRight, Database, GitBranch } from 'lucide-react'
+import ChevronDown from 'lucide-react/dist/esm/icons/chevron-down'
+import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right'
+import Database from 'lucide-react/dist/esm/icons/database'
+import GitBranch from 'lucide-react/dist/esm/icons/git-branch'
 import { useMemo, useState } from 'react'
-import { usePipelineStore } from '@/stores'
-import type { Dataset, DataView } from '@/types'
+import { useHydratedNodes } from '@/lib/pipeline/hooks/useHydratedNodes'
+import type { HydratedNode } from '@/lib/pipeline/hydration'
+import { usePipelineStore } from '@/stores/pipelineStore'
 
 export function DatasetDropdown() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
-  const nodes = usePipelineStore((s) => s.nodes)
+  const nodes = useHydratedNodes()
   const edges = usePipelineStore((s) => s.edges)
   const setActiveNode = usePipelineStore((s) => s.setActiveNode)
   const openTab = usePipelineStore((s) => s.openTab)
 
-  const datasets = useMemo(() => Object.values(nodes).filter((n): n is Dataset => n.type === 'dataset'), [nodes])
+  const datasets = useMemo(
+    () => Object.values(nodes).filter((n): n is Extract<HydratedNode, { type: 'dataset' }> => n.type === 'dataset'),
+    [nodes]
+  )
 
   // Get direct children of a node
-  const getChildren = (nodeId: string): DataView[] => {
+  const getChildren = (nodeId: string): Extract<HydratedNode, { type: 'view' }>[] => {
     const childIds = edges.filter((e) => e.sourceId === nodeId).map((e) => e.targetId)
-    return childIds.map((id) => nodes[id]).filter((n): n is DataView => n?.type === 'view')
+    return childIds
+      .map((id) => nodes[id])
+      .filter((n): n is Extract<HydratedNode, { type: 'view' }> => n?.type === 'view')
   }
 
   const handleSelect = (nodeId: string) => {
@@ -39,7 +48,7 @@ export function DatasetDropdown() {
     })
   }
 
-  const renderNode = (node: Dataset | DataView, depth: number = 0) => {
+  const renderNode = (node: Extract<HydratedNode, { type: 'dataset' | 'view' }>, depth: number = 0) => {
     const children = getChildren(node.id)
     const isDataset = node.type === 'dataset'
     const hasChildren = children.length > 0
@@ -70,7 +79,7 @@ export function DatasetDropdown() {
           )}
           <span className="truncate flex-1">{node.name}</span>
           <span className="text-[10px] text-[var(--color-text-muted)] shrink-0">
-            {node.rowCount !== null ? node.rowCount.toLocaleString() : '...'}
+            {typeof node.rowCount === 'number' ? node.rowCount.toLocaleString() : '...'}
           </span>
         </DropdownMenu.Item>
         {isExpanded && children.map((child) => renderNode(child, depth + 1))}

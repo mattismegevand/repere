@@ -4,43 +4,53 @@ export const modernPalette: ColorPalette = {
   metadata: {
     id: 'modern',
     name: 'Modern',
-    description: 'Clean neutrals with blue accent',
+    description: 'Precision instrument with warm amber accent',
   },
   colors: {
     light: {
-      bgPrimary: '#ffffff',
-      bgSecondary: '#f9fafb',
-      bgTertiary: '#f3f4f6',
-      textPrimary: '#111827',
-      textSecondary: '#4b5563',
-      textMuted: '#9ca3af',
-      border: '#e5e7eb',
-      borderLight: '#f3f4f6',
-      accent: '#3b82f6',
-      accentHover: '#2563eb',
-      accentBg: '#eff6ff',
+      // Refined warm neutrals with slight warmth
+      bgPrimary: '#fafaf9',
+      bgSecondary: '#f5f5f4',
+      bgTertiary: '#e7e5e4',
+      // Rich, readable text colors
+      textPrimary: '#1c1917',
+      textSecondary: '#57534e',
+      textMuted: '#a8a29e',
+      // Subtle warm borders
+      border: '#d6d3d1',
+      borderLight: '#e7e5e4',
+      // Warm amber accent - like brass instruments
+      accent: '#b45309',
+      accentHover: '#92400e',
+      accentBg: '#fef3c7',
+      // Semantic colors
       error: '#dc2626',
       errorBg: '#fef2f2',
-      success: '#16a34a',
-      successBg: '#f0fdf4',
+      success: '#059669',
+      successBg: '#ecfdf5',
       warning: '#d97706',
       warningBg: '#fffbeb',
     },
     dark: {
-      bgPrimary: '#0f0f0f',
-      bgSecondary: '#171717',
-      bgTertiary: '#262626',
-      textPrimary: '#fafafa',
-      textSecondary: '#a3a3a3',
-      textMuted: '#737373',
-      border: '#262626',
-      borderLight: '#1f1f1f',
-      accent: '#3b82f6',
-      accentHover: '#60a5fa',
-      accentBg: '#172554',
+      // Deep, rich dark backgrounds
+      bgPrimary: '#0c0a09',
+      bgSecondary: '#1c1917',
+      bgTertiary: '#292524',
+      // Clean white text with warm undertones
+      textPrimary: '#fafaf9',
+      textSecondary: '#a8a29e',
+      textMuted: '#78716c',
+      // Subtle borders that don't compete
+      border: '#292524',
+      borderLight: '#1c1917',
+      // Brighter amber for dark mode visibility
+      accent: '#f59e0b',
+      accentHover: '#fbbf24',
+      accentBg: '#451a03',
+      // Semantic colors adjusted for dark
       error: '#f87171',
       errorBg: '#450a0a',
-      success: '#4ade80',
+      success: '#34d399',
       successBg: '#052e16',
       warning: '#fbbf24',
       warningBg: '#451a03',
@@ -48,14 +58,15 @@ export const modernPalette: ColorPalette = {
   },
   chart: {
     light: {
-      categorical: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#ec4899'],
-      sequential: ['#eff6ff', '#dbeafe', '#bfdbfe', '#93c5fd', '#60a5fa', '#3b82f6', '#2563eb'],
-      diverging: ['#ef4444', '#fca5a5', '#fef2f2', '#f0fdf4', '#86efac', '#22c55e'],
+      // Warm, sophisticated palette
+      categorical: ['#b45309', '#0891b2', '#059669', '#7c3aed', '#dc2626', '#0369a1', '#c026d3', '#475569'],
+      sequential: ['#fef3c7', '#fde68a', '#fcd34d', '#fbbf24', '#f59e0b', '#d97706', '#b45309'],
+      diverging: ['#dc2626', '#fca5a5', '#fef2f2', '#ecfdf5', '#6ee7b7', '#059669'],
     },
     dark: {
-      categorical: ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#22d3ee', '#fb923c', '#f472b6'],
-      sequential: ['#1e3a5f', '#1e4976', '#1e588d', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd'],
-      diverging: ['#f87171', '#fecaca', '#262626', '#1a1a1a', '#86efac', '#4ade80'],
+      categorical: ['#fbbf24', '#22d3ee', '#34d399', '#a78bfa', '#f87171', '#38bdf8', '#e879f9', '#94a3b8'],
+      sequential: ['#451a03', '#78350f', '#92400e', '#b45309', '#d97706', '#f59e0b', '#fbbf24'],
+      diverging: ['#f87171', '#fecaca', '#292524', '#1c1917', '#6ee7b7', '#34d399'],
     },
   },
 }

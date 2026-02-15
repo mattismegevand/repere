@@ -1,4 +1,6 @@
-import { ArrowRight, Monitor, Tablet } from 'lucide-react'
+import ArrowRight from 'lucide-react/dist/esm/icons/arrow-right'
+import Monitor from 'lucide-react/dist/esm/icons/monitor'
+import Tablet from 'lucide-react/dist/esm/icons/tablet'
 import { useEffect, useState } from 'react'
 import { Logo } from '@/components/ui'
 import { isSmallScreen } from '@/lib/device'

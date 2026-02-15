@@ -4,7 +4,7 @@ import { Prec } from '@codemirror/state'
 import { type KeyBinding, keymap } from '@codemirror/view'
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror'
 import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react'
-import { useThemeStore } from '@/stores'
+import { useThemeStore } from '@/stores/themeStore'
 import { getEffectiveColorScheme } from '@/themes'
 
 interface PythonEditorProps {

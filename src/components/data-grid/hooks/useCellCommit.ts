@@ -1,6 +1,8 @@
 import { useCallback } from 'react'
 import type { DuckDBClient } from '@/lib/duckdb/interface'
-import type { Column, DataView, EditCellOperation, PipelineNode } from '@/types'
+import type { HydratedNode } from '@/lib/pipeline/hydration'
+import type { EditCellOperation, DataView as PipelineDataView } from '@/types'
+import type { RuntimeColumn } from '@/types/pipelineRuntime'
 
 interface EditingCell {
   row: number
@@ -10,16 +12,16 @@ interface EditingCell {
 
 interface UseCellCommitOptions {
   editingCell: EditingCell | null
-  activeNode: PipelineNode | null
-  visibleColumns: Column[]
+  activeNode: HydratedNode | null
+  visibleColumns: RuntimeColumn[]
   client: DuckDBClient | null
-  nodes: Record<string, PipelineNode>
+  nodes: Record<string, HydratedNode>
   getRow: (index: number) => Record<string, unknown> | undefined
-  validateEditValue: (value: string, type: Column['type']) => boolean
-  formatValueForEdit: (value: unknown, type: Column['type']) => string
-  parseValue: (value: string, type: Column['type']) => unknown
+  validateEditValue: (value: string, type: RuntimeColumn['type']) => boolean
+  formatValueForEdit: (value: unknown, type: RuntimeColumn['type']) => string
+  parseValue: (value: string, type: RuntimeColumn['type']) => unknown
   clearEditingCell: () => void
-  applyOrReplaceOperation: (operation: EditCellOperation) => Promise<DataView | null>
+  applyOrReplaceOperation: (operation: EditCellOperation) => Promise<PipelineDataView | null>
   removeCurrentOperation: () => Promise<{ success: boolean; needsConfirmation?: boolean; descendantCount?: number }>
   saveScrollPosition: (row: number, scrollLeft: number) => void
   getScrollLeft: () => number
@@ -75,10 +77,10 @@ export function useCellCommit({
     const colName = column.name
 
     // Check if we're editing an existing editCell view
-    const isEditCellView = activeNode.type === 'view' && (activeNode as DataView).operation.type === 'editCell'
+    const isEditCellView = activeNode.type === 'view' && activeNode.operation.type === 'editCell'
 
     if (isEditCellView) {
-      const view = activeNode as DataView
+      const view = activeNode
       const currentOp = view.operation as EditCellOperation
       const existingEdits = [...currentOp.edits]
 
@@ -88,7 +90,7 @@ export function useCellCommit({
 
       if (parentId) {
         const parentNode = nodes[parentId]
-        if (parentNode) {
+        if (parentNode?.tableName) {
           try {
             const result = await client.query<{ val: unknown }>(`
               SELECT "${colName}" as val FROM (

@@ -35,14 +35,14 @@ export function FormTextarea<T extends FieldValues, TName extends FieldPath<T>>(
 
   return (
     <div className="space-y-1">
-      {label && <Label>{label}</Label>}
+      {label ? <Label>{label}</Label> : null}
       <textarea
         {...field}
         {...props}
         className={`w-full bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-[var(--radius-md)] ${sizeStyles[textareaSize]} focus:outline-none focus:border-[var(--color-accent)] resize-y min-h-[60px] ${error ? 'border-[var(--color-error)]' : ''} ${className}`}
       />
-      {description && !error && <p className="text-[10px] text-[var(--color-text-muted)]">{description}</p>}
-      {error && <p className="text-[10px] text-[var(--color-error)]">{error.message}</p>}
+      {description && !error ? <p className="text-[10px] text-[var(--color-text-muted)]">{description}</p> : null}
+      {error ? <p className="text-[10px] text-[var(--color-error)]">{error.message}</p> : null}
     </div>
   )
 }

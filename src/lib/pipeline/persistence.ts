@@ -1,7 +1,7 @@
 import JSZip from 'jszip'
 import type { DuckDBClient } from '@/lib/duckdb/interface'
 import { saveFileTauri } from '@/lib/file-system/tauri-file-ops'
-import { isTauri } from '@/lib/platform'
+import { isNativeRuntime } from '@/lib/runtime'
 import type {
   ChartConfig,
   ChartNode,
@@ -484,7 +484,7 @@ export async function downloadSession(blob: Blob, filename?: string): Promise<st
   const name = filename ?? 'session.repere'
 
   // Use native save dialog in Tauri
-  if (isTauri()) {
+  if (isNativeRuntime()) {
     const savedPath = await saveFileTauri(name, blob, [{ name: 'repere Session', extensions: ['repere'] }])
     if (savedPath) return savedPath
     // Fall through to browser download if user cancelled

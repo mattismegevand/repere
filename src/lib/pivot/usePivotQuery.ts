@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PivotTableData } from '@/components/pivot-table/types'
 import { useDuckDB } from '@/lib/duckdb'
 import { normalizeRowDates } from '@/lib/formatters'
-import { usePanelStore, usePipelineStore, usePivotStore } from '@/stores'
+import { useHydratedNodes } from '@/lib/pipeline/hooks/useHydratedNodes'
+import { usePanelStore } from '@/stores/panelStore'
+import { usePivotStore } from '@/stores/pivotStore'
 import { buildPivotPreviewSql, transformPivotData } from './transformPivotData'
 
 interface UsePivotQueryResult {
@@ -17,8 +19,13 @@ const DEBOUNCE_MS = 300
 export function usePivotQuery(): UsePivotQueryResult {
   const { client } = useDuckDB()
   const activeEditingPanel = usePanelStore((s) => s.activeEditingPanel)
-  const { nodes } = usePipelineStore()
-  const { rowFields, columnField, valueFields, filters, showSubtotals, showGrandTotal } = usePivotStore()
+  const nodes = useHydratedNodes()
+  const rowFields = usePivotStore((s) => s.rowFields)
+  const columnField = usePivotStore((s) => s.columnField)
+  const valueFields = usePivotStore((s) => s.valueFields)
+  const filters = usePivotStore((s) => s.filters)
+  const showSubtotals = usePivotStore((s) => s.showSubtotals)
+  const showGrandTotal = usePivotStore((s) => s.showGrandTotal)
 
   // Derive pivot source from discriminated union
   const pivotSourceNodeId = activeEditingPanel.type === 'pivot' ? activeEditingPanel.sourceNodeId : null
@@ -34,7 +41,7 @@ export function usePivotQuery(): UsePivotQueryResult {
 
   // Fetch distinct values for pivot column (only if columnField is set)
   const fetchPivotValues = useCallback(async (): Promise<string[]> => {
-    if (!client || !sourceNode || !columnField) {
+    if (!client || !sourceNode || !sourceNode.tableName || !columnField) {
       setPivotValues([])
       return []
     }
@@ -60,7 +67,7 @@ export function usePivotQuery(): UsePivotQueryResult {
   // Execute pivot/group by query
   const executeQuery = useCallback(
     async (values: string[]) => {
-      if (!client || !sourceNode || valueFields.length === 0) {
+      if (!client || !sourceNode || !sourceNode.tableName || valueFields.length === 0) {
         setData(null)
         return
       }
@@ -87,7 +94,7 @@ export function usePivotQuery(): UsePivotQueryResult {
         )
 
         const result = await client.query(sql)
-        const columns = sourceNode?.columns ?? []
+        const columns = sourceNode.columns ?? []
         const flatRows = result.rows.map((row) => normalizeRowDates(row, columns))
 
         const tableData = transformPivotData(flatRows, {

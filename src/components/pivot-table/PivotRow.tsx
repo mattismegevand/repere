@@ -61,7 +61,7 @@ export function PivotRow({ row, columns, onToggleExpand, onCellClick }: PivotRow
                     {row.isExpanded ? '▼' : '▶'}
                   </button>
                 )}
-                {!hasChildren && row.level > 0 && <span className="w-4 mr-1" />}
+                {!hasChildren && row.level > 0 ? <span className="w-4 mr-1" /> : null}
                 <span>{displayValue}</span>
                 {hasChildren && !row.isExpanded && (
                   <span className="ml-1 text-[9px] text-[var(--color-text-muted)]">

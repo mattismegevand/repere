@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { MiniTable } from '@/components/pipeline-canvas/nodes/MiniTable'
 import { useDuckDB } from '@/lib/duckdb'
-import type { PipelineNode } from '@/types'
+import type { HydratedNode } from '@/lib/pipeline/hydration'
 
 interface InlineTablePreviewProps {
-  node: PipelineNode | null
+  node: HydratedNode | null
   height?: number
 }
 
@@ -21,16 +21,18 @@ export function InlineTablePreview({ node, height = 140 }: InlineTablePreviewPro
   }>({ rows: [], loading: false, error: null })
 
   useEffect(() => {
-    if (!node || !client) {
+    if (!node || !node.tableName || !client) {
       setPreviewData({ rows: [], loading: false, error: null })
       return
     }
 
     setPreviewData((p) => ({ ...p, loading: true, error: null }))
+    const tableName = node.tableName
+    if (!tableName) return
 
     const fetchPreview = async () => {
       try {
-        const query = `SELECT * FROM ${escapeIdentifier(node.tableName)} LIMIT 5`
+        const query = `SELECT * FROM ${escapeIdentifier(tableName)} LIMIT 5`
         const result = await client.query(query)
         setPreviewData({ rows: result.rows, loading: false, error: null })
       } catch (err) {
@@ -64,7 +66,7 @@ export function InlineTablePreview({ node, height = 140 }: InlineTablePreviewPro
       <div style={{ height: `calc(100% - 24px)` }}>
         <MiniTable
           rows={previewData.rows}
-          columns={node.columns}
+          columns={node.columns ?? []}
           loading={previewData.loading}
           error={previewData.error}
         />

@@ -1,4 +1,4 @@
-import { SquareCode } from 'lucide-react'
+import SquareCode from 'lucide-react/dist/esm/icons/square-code'
 import type { ToolDefinition } from '@/types/ai'
 import type { SqlQueryOperation } from '@/types/pipeline'
 import type { OperationPlugin, OperationUiMeta, ValidationResult } from '../types'
@@ -8,6 +8,7 @@ const ui: OperationUiMeta = {
   icon: SquareCode,
   color: 'cyan',
   editable: true,
+  editor: { type: 'sql' },
 }
 
 // Note: sql operation doesn't have a public tool definition - it's for power users only

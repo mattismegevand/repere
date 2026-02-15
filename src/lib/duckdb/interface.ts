@@ -1,4 +1,4 @@
-import type { Column } from '@/types/dataset'
+import type { RuntimeColumn } from '@/types/pipelineRuntime'
 
 export interface ColumnInfo {
   name: string
@@ -31,7 +31,7 @@ export interface DuckDBClient {
   loadFile(tableName: string, source: File | string, fileType?: string): Promise<LoadResult>
 
   /** Get table/view schema via DESCRIBE */
-  describe(tableName: string): Promise<Column[]>
+  describe(tableName: string): Promise<RuntimeColumn[]>
 
   /** Get row count for a table/view */
   count(tableName: string): Promise<number>

@@ -1,12 +1,12 @@
 import { readFileTauri } from '@/lib/file-system/tauri-file-ops'
-import { isTauri } from '@/lib/platform'
+import { isNativeRuntime } from '@/lib/runtime'
 import { loadFileHandle, loadSessionBlob, removeFileHandle, removeSessionBlob } from '@/lib/storage/idb'
 import type { RecentSessionRef } from './types'
 
 export type ResolveResult = { blob: Blob } | { error: 'not-found' | 'permission-denied' | 'corrupted' }
 
 export function canUseFileHandles(): boolean {
-  return !isTauri() && 'showSaveFilePicker' in window
+  return !isNativeRuntime() && 'showSaveFilePicker' in window
 }
 
 export async function resolveSession(ref: RecentSessionRef): Promise<ResolveResult> {

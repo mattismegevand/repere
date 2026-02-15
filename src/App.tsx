@@ -36,7 +36,8 @@ import { usePipeline } from '@/lib/pipeline'
 import { deserializeSession } from '@/lib/pipeline/persistence'
 import { isModKey, isTauri } from '@/lib/platform'
 import { clearUrlHash, hasUrlSession, parseUrlSession } from '@/lib/url-sharing'
-import { useDialogStore, usePanelStore } from '@/stores'
+import { useDialogStore } from '@/stores/dialogStore'
+import { usePanelStore } from '@/stores/panelStore'
 import { useTheme } from '@/themes'
 
 export default function App() {
@@ -74,7 +75,9 @@ export default function App() {
     cancelRestoration,
     deleteNode,
   } = usePipeline()
-  const { activeDialog, openDialog, closeDialog } = useDialogStore()
+  const activeDialog = useDialogStore((s) => s.activeDialog)
+  const openDialog = useDialogStore((s) => s.openDialog)
+  const closeDialog = useDialogStore((s) => s.closeDialog)
   const setCommandPalette = usePanelStore((s) => s.setCommandPalette)
   const activeEditingPanel = usePanelStore((s) => s.activeEditingPanel)
   const setFilterEditor = usePanelStore((s) => s.setFilterEditor)
@@ -509,7 +512,7 @@ export default function App() {
           >
             {renderMainContent()}
           </div>
-          {pivotPanelOpen && <PivotPanel />}
+          {pivotPanelOpen ? <PivotPanel /> : null}
           <ProfilePanel />
           <AIChat />
           {/* Loading overlay */}
@@ -528,17 +531,17 @@ export default function App() {
         <PythonPanel />
 
         {/* Status bar */}
-        {activeNodeId && !showHomepage && <StatusBar />}
+        {activeNodeId && !showHomepage ? <StatusBar /> : null}
       </div>
       <CommandPalette />
-      {activeDialog?.type === 'join' && <JoinDialog onClose={closeDialog} />}
-      {activeDialog?.type === 'union' && <UnionDialog onClose={closeDialog} />}
-      {activeDialog?.type === 'addColumn' && <AddColumnDialog onClose={closeDialog} />}
-      {activeDialog?.type === 'window' && <WindowDialog />}
-      {filterEditorOpen && <FilterEditorDialog onClose={() => setFilterEditor(false)} />}
-      {showCanvasBranchDialog && <BranchDecisionDialog onComplete={handleCanvasBranchDecisionComplete} />}
-      {(activeDialog?.type === 'loadSession' || pendingSession) && <LoadSessionDialog onClose={closeDialog} />}
-      {activeDialog?.type === 'shortcutCheatsheet' && <ShortcutCheatsheet onClose={closeDialog} />}
+      {activeDialog?.type === 'join' ? <JoinDialog onClose={closeDialog} /> : null}
+      {activeDialog?.type === 'union' ? <UnionDialog onClose={closeDialog} /> : null}
+      {activeDialog?.type === 'addColumn' ? <AddColumnDialog onClose={closeDialog} /> : null}
+      {activeDialog?.type === 'window' ? <WindowDialog /> : null}
+      {filterEditorOpen ? <FilterEditorDialog onClose={() => setFilterEditor(false)} /> : null}
+      {showCanvasBranchDialog ? <BranchDecisionDialog onComplete={handleCanvasBranchDecisionComplete} /> : null}
+      {activeDialog?.type === 'loadSession' || pendingSession ? <LoadSessionDialog onClose={closeDialog} /> : null}
+      {activeDialog?.type === 'shortcutCheatsheet' ? <ShortcutCheatsheet onClose={closeDialog} /> : null}
       {restorationState && (
         <RestorationDialog
           mode="partial"
@@ -556,9 +559,9 @@ export default function App() {
         <DeleteNodeDialog nodeIds={activeDialog.nodeIds} onDelete={handleConfirmDelete} onCancel={handleCancelDelete} />
       )}
       <OnboardingTour />
-      {chartPanelOpen && <ChartConfigPopover />}
-      {activeDialog?.type === 'chartModal' && <ChartModal />}
-      {activeDialog?.type === 'export' && <ExportDialog />}
+      {chartPanelOpen ? <ChartConfigPopover /> : null}
+      {activeDialog?.type === 'chartModal' ? <ChartModal /> : null}
+      {activeDialog?.type === 'export' ? <ExportDialog /> : null}
       <DashboardView />
     </MobileBlocker>
   )

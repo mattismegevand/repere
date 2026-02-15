@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, useContext, useMemo } from 'react'
-import type { NumberFormat } from '@/stores'
+import type { NumberFormat } from '@/stores/themeStore'
 import type { Column } from '@/types'
 
 export interface ColumnStat {

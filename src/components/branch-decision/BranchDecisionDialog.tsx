@@ -1,8 +1,10 @@
-import { GitBranch, Replace } from 'lucide-react'
+import GitBranch from 'lucide-react/dist/esm/icons/git-branch'
+import Replace from 'lucide-react/dist/esm/icons/replace'
 import { Button } from '@/components/ui'
 import { RadixDialog } from '@/components/ui/RadixDialog'
 import { usePipeline } from '@/lib/pipeline/usePipeline'
 import { usePipelineStore } from '@/stores/pipelineStore'
+import { usePipelineUiStore } from '@/stores/pipelineUiStore'
 import type { DataView, FilterOperation } from '@/types'
 
 interface Props {
@@ -10,7 +12,10 @@ interface Props {
 }
 
 export function BranchDecisionDialog({ onComplete }: Props) {
-  const { pendingBranchEdit, exitBranchingMode, getNode, getNodeChildren } = usePipelineStore()
+  const pendingBranchEdit = usePipelineUiStore((s) => s.pendingBranchEdit)
+  const exitBranchingMode = usePipelineUiStore((s) => s.exitBranchingMode)
+  const getNode = usePipelineStore((s) => s.getNode)
+  const getNodeChildren = usePipelineStore((s) => s.getNodeChildren)
   const { createBranchFromSnapshot, applyOrReplaceOperation } = usePipeline()
 
   if (!pendingBranchEdit) return null

@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { usePipeline } from '@/lib/pipeline/usePipeline'
 import { usePipelineStore } from '@/stores/pipelineStore'
+import { usePipelineUiStore } from '@/stores/pipelineUiStore'
 import type { DataView, FilterOperation } from '@/types'
 
 interface UseFilterApplyOptions {
@@ -20,7 +21,8 @@ export function useFilterApply({ onSuccess }: UseFilterApplyOptions = {}) {
     async (operation: FilterOperation): Promise<boolean> => {
       if (!activeNode) return false
 
-      const { pendingBranchEdit, captureSnapshot, enterBranchingMode } = usePipelineStore.getState()
+      const { captureSnapshot } = usePipelineStore.getState()
+      const { pendingBranchEdit, enterBranchingMode } = usePipelineUiStore.getState()
       const hasChildren = getNodeChildren(activeNode.id).length > 0
       const isFilterView = activeNode.type === 'view' && (activeNode as DataView).operation.type === 'filter'
 

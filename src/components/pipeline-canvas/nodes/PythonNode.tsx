@@ -1,13 +1,18 @@
-import { Eye, EyeOff, Pencil } from 'lucide-react'
+import Eye from 'lucide-react/dist/esm/icons/eye'
+import EyeOff from 'lucide-react/dist/esm/icons/eye-off'
+import Pencil from 'lucide-react/dist/esm/icons/pencil'
 import { memo, useCallback } from 'react'
 import { PythonIcon } from '@/components/icons/PythonIcon'
 import { useNodePreview } from '@/lib/duckdb/useNodePreview'
-import { usePanelStore, usePipelineStore } from '@/stores'
-import type { PythonNode as PythonNodeType } from '@/types'
+import type { HydratedNode } from '@/lib/pipeline/hydration'
+import { usePanelStore } from '@/stores/panelStore'
+import { usePipelineStore } from '@/stores/pipelineStore'
 import { ExpandablePreview, NodeActionButton, NodeContent, NodeHeader, NodeShell } from './shared'
 
+type HydratedPython = Extract<HydratedNode, { type: 'python' }>
+
 interface PythonNodeData {
-  python: PythonNodeType
+  python: HydratedPython
   isActive: boolean
   isSelected: boolean
   isPending?: boolean
@@ -17,13 +22,13 @@ interface PythonNodeData {
 export const PythonNode = memo(function PythonNode({ data, selected }: { data: PythonNodeData; selected?: boolean }) {
   const { python, isActive, isSelected, isPending } = data
   const isNodeSelected = isSelected || selected
-  const { openPythonPanelForNode } = usePanelStore()
-  const { toggleNodeExpanded } = usePipelineStore()
+  const openPythonPanelForNode = usePanelStore((s) => s.openPythonPanelForNode)
+  const toggleNodeExpanded = usePipelineStore((s) => s.toggleNodeExpanded)
 
   const isExpanded = !!python.isExpanded && !isPending
   const canExpand = !isPending && python.rowCount !== 0
 
-  const preview = useNodePreview(python.tableName, isExpanded)
+  const preview = useNodePreview(python.tableName ?? '', isExpanded && !!python.tableName)
 
   const handleEdit = useCallback(
     (e: React.MouseEvent) => {
@@ -42,11 +47,12 @@ export const PythonNode = memo(function PythonNode({ data, selected }: { data: P
   )
 
   const handleDragStart = (e: React.DragEvent) => {
+    if (!python.tableName) return
     e.dataTransfer.setData('text/plain', python.tableName)
     e.dataTransfer.effectAllowed = 'copy'
   }
 
-  const formatCount = (n: number | null) => (n === null ? '...' : n.toLocaleString())
+  const formatCount = (n: number | null | undefined) => (typeof n === 'number' ? n.toLocaleString() : '...')
 
   const formatTime = (ms: number | undefined) => {
     if (ms === undefined) return null
@@ -100,16 +106,18 @@ export const PythonNode = memo(function PythonNode({ data, selected }: { data: P
 
       <NodeContent>
         <div className="text-[var(--color-text-secondary)]">
-          {formatCount(python.rowCount)} rows · {python.columns.length} cols
+          {formatCount(python.rowCount)} rows · {python.columns?.length ?? 0} cols
         </div>
-        <div
-          draggable
-          onDragStart={handleDragStart}
-          className="nodrag font-mono text-[10px] truncate text-[var(--color-text-muted)] cursor-grab hover:text-[var(--color-accent)] active:cursor-grabbing"
-          title={`${python.tableName} (drag to SQL editor)`}
-        >
-          {python.tableName}
-        </div>
+        {python.tableName && (
+          <div
+            draggable
+            onDragStart={handleDragStart}
+            className="nodrag font-mono text-[10px] truncate text-[var(--color-text-muted)] cursor-grab hover:text-[var(--color-accent)] active:cursor-grabbing"
+            title={`${python.tableName} (drag to SQL editor)`}
+          >
+            {python.tableName}
+          </div>
+        )}
       </NodeContent>
 
       <ExpandablePreview

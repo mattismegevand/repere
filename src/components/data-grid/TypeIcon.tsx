@@ -1,21 +1,19 @@
-import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
-  Binary,
-  Braces,
-  Calendar,
-  CalendarClock,
-  Clock,
-  Filter,
-  Fingerprint,
-  Hash,
-  HelpCircle,
-  List,
-  Timer,
-  ToggleRight,
-  Type,
-} from 'lucide-react'
+import ArrowDown from 'lucide-react/dist/esm/icons/arrow-down'
+import ArrowUp from 'lucide-react/dist/esm/icons/arrow-up'
+import ArrowUpDown from 'lucide-react/dist/esm/icons/arrow-up-down'
+import Binary from 'lucide-react/dist/esm/icons/binary'
+import Braces from 'lucide-react/dist/esm/icons/braces'
+import Calendar from 'lucide-react/dist/esm/icons/calendar'
+import CalendarClock from 'lucide-react/dist/esm/icons/calendar-clock'
+import Clock from 'lucide-react/dist/esm/icons/clock'
+import Filter from 'lucide-react/dist/esm/icons/filter'
+import Fingerprint from 'lucide-react/dist/esm/icons/fingerprint'
+import Hash from 'lucide-react/dist/esm/icons/hash'
+import HelpCircle from 'lucide-react/dist/esm/icons/help-circle'
+import List from 'lucide-react/dist/esm/icons/list'
+import Timer from 'lucide-react/dist/esm/icons/timer'
+import ToggleRight from 'lucide-react/dist/esm/icons/toggle-right'
+import Type from 'lucide-react/dist/esm/icons/type'
 import type { ColumnType } from '@/types'
 
 interface TypeIconProps {

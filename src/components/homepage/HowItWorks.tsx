@@ -1,4 +1,7 @@
-import { Download, FileSpreadsheet, RefreshCw, Wand2 } from 'lucide-react'
+import Download from 'lucide-react/dist/esm/icons/download'
+import FileSpreadsheet from 'lucide-react/dist/esm/icons/file-spreadsheet'
+import RefreshCw from 'lucide-react/dist/esm/icons/refresh-cw'
+import Wand2 from 'lucide-react/dist/esm/icons/wand-2'
 import { useInView } from '@/hooks'
 
 const STEPS = [

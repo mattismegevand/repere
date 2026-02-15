@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { usePanelStore } from '@/stores'
+import { usePanelStore } from '@/stores/panelStore'
 import { useRowDataContext, useSelectionContext, useVirtualScrollContext } from './context'
 import { ROW_HEIGHT } from './DataGridProvider'
 import { GridRow } from './GridRow'
@@ -17,7 +17,9 @@ export function GridBody({ parentRef, activeNodeId, onContextMenu }: GridBodyPro
   const virtualScroll = useVirtualScrollContext()
   const lastMouseYRef = useRef(0)
 
-  const { preservedScroll, lastRestoredScrollVersion, markScrollRestored } = usePanelStore()
+  const preservedScroll = usePanelStore((s) => s.preservedScroll)
+  const lastRestoredScrollVersion = usePanelStore((s) => s.lastRestoredScrollVersion)
+  const markScrollRestored = usePanelStore((s) => s.markScrollRestored)
 
   // Handle global mouseup to end drag selection
   useEffect(() => {

@@ -1,9 +1,11 @@
-import { X } from 'lucide-react'
+import X from 'lucide-react/dist/esm/icons/x'
 import { useEffect, useMemo, useRef } from 'react'
 import { Button, Checkbox } from '@/components/ui'
 import { useDuckDB } from '@/lib/duckdb'
+import { useHydratedNodes } from '@/lib/pipeline/hooks/useHydratedNodes'
 import { usePipeline } from '@/lib/pipeline/usePipeline'
-import { usePanelStore, usePipelineStore, usePivotStore } from '@/stores'
+import { usePanelStore } from '@/stores/panelStore'
+import { usePivotStore } from '@/stores/pivotStore'
 import type { FilterOperator } from '@/types/dataset'
 import type { AggregateFunction, PivotAggregation, PivotOperation } from '@/types/pipeline'
 import { DropZone } from './DropZone'
@@ -15,7 +17,7 @@ export function PivotPanel() {
   const { client } = useDuckDB()
   const closePivotPanel = usePanelStore((s) => s.closePivotPanel)
   const activeEditingPanel = usePanelStore((s) => s.activeEditingPanel)
-  const { nodes } = usePipelineStore()
+  const nodes = useHydratedNodes()
   const { applyOperation, openTab, deleteNode } = usePipeline()
 
   // Derive pivot-specific values from the discriminated union
@@ -26,27 +28,25 @@ export function PivotPanel() {
   // Initialize with editing node ID if we're editing an existing pivot
   const createdPivotIdRef = useRef<string | null>(pivotEditingNodeId)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const {
-    rowFields,
-    columnField,
-    valueFields,
-    filters,
-    showSubtotals,
-    showGrandTotal,
-    addRowField,
-    removeRowField,
-    reorderRowFields,
-    setColumnField,
-    addValueField,
-    removeValueField,
-    updateValueField,
-    addFilter,
-    updateFilter,
-    removeFilter,
-    setShowSubtotals,
-    setShowGrandTotal,
-    reset,
-  } = usePivotStore()
+  const rowFields = usePivotStore((s) => s.rowFields)
+  const columnField = usePivotStore((s) => s.columnField)
+  const valueFields = usePivotStore((s) => s.valueFields)
+  const filters = usePivotStore((s) => s.filters)
+  const showSubtotals = usePivotStore((s) => s.showSubtotals)
+  const showGrandTotal = usePivotStore((s) => s.showGrandTotal)
+  const addRowField = usePivotStore((s) => s.addRowField)
+  const removeRowField = usePivotStore((s) => s.removeRowField)
+  const reorderRowFields = usePivotStore((s) => s.reorderRowFields)
+  const setColumnField = usePivotStore((s) => s.setColumnField)
+  const addValueField = usePivotStore((s) => s.addValueField)
+  const removeValueField = usePivotStore((s) => s.removeValueField)
+  const updateValueField = usePivotStore((s) => s.updateValueField)
+  const addFilter = usePivotStore((s) => s.addFilter)
+  const updateFilter = usePivotStore((s) => s.updateFilter)
+  const removeFilter = usePivotStore((s) => s.removeFilter)
+  const setShowSubtotals = usePivotStore((s) => s.setShowSubtotals)
+  const setShowGrandTotal = usePivotStore((s) => s.setShowGrandTotal)
+  const reset = usePivotStore((s) => s.reset)
 
   const sourceNode = pivotSourceNodeId ? nodes[pivotSourceNodeId] : null
   const columns = sourceNode?.columns ?? []
@@ -86,10 +86,10 @@ export function PivotPanel() {
           createdPivotIdRef.current = null
         }
 
-        if (columnField) {
+        if (columnField && sourceNode.tableName) {
           // PIVOT mode - has column field
           const sql = `SELECT DISTINCT "${columnField.replace(/"/g, '""')}" AS val
-                       FROM "${sourceNode.tableName.replace(/"/g, '""')}"
+                        FROM "${sourceNode.tableName.replace(/"/g, '""')}"
                        WHERE "${columnField.replace(/"/g, '""')}" IS NOT NULL
                        ORDER BY val
                        LIMIT 100`

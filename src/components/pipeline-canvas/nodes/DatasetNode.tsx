@@ -1,13 +1,17 @@
-import { Database, Eye, EyeOff } from 'lucide-react'
+import Database from 'lucide-react/dist/esm/icons/database'
+import Eye from 'lucide-react/dist/esm/icons/eye'
+import EyeOff from 'lucide-react/dist/esm/icons/eye-off'
 import { memo, useCallback, useRef, useState } from 'react'
 import { useNodePreview } from '@/lib/duckdb/useNodePreview'
-import { usePipelineStore } from '@/stores'
-import type { DatasetRestorationStatus } from '@/stores/pipelineStore'
-import type { Dataset } from '@/types'
+import type { HydratedNode } from '@/lib/pipeline/hydration'
+import { usePipelineStore } from '@/stores/pipelineStore'
+import type { DatasetRestorationStatus } from '@/stores/pipelineUiStore'
 import { ExpandablePreview, NodeActionButton, NodeContent, NodeHeader, NodeShell } from './shared'
 
+type HydratedDataset = Extract<HydratedNode, { type: 'dataset' }>
+
 interface DatasetNodeData {
-  dataset: Dataset
+  dataset: HydratedDataset
   isActive: boolean
   isSelected: boolean
   restorationStatus?: DatasetRestorationStatus
@@ -15,7 +19,7 @@ interface DatasetNodeData {
   onFileDrop?: (file: File) => void
   onFileSelect?: (file: File) => void
   onSkip?: () => void
-  onFillPlaceholder?: (file: File) => void
+  onFillPlaceholder?: (file: File) => void | Promise<unknown>
   [key: string]: unknown
 }
 
@@ -40,7 +44,7 @@ export const DatasetNode = memo(function DatasetNode({
   const isNodeSelected = isSelected || selected
   const [isDragOver, setIsDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { toggleNodeExpanded } = usePipelineStore()
+  const toggleNodeExpanded = usePipelineStore((s) => s.toggleNodeExpanded)
 
   const isRestorationMode = restorationStatus !== undefined
   const canAcceptFile = isRestorationMode && restorationStatus !== 'embedded'
@@ -48,10 +52,11 @@ export const DatasetNode = memo(function DatasetNode({
   const isExpanded = !!dataset.isExpanded && !isPlaceholder && !isRestorationMode
   const canExpand = !isPlaceholder && !isRestorationMode && dataset.rowCount !== 0
 
-  const preview = useNodePreview(dataset.tableName, isExpanded)
+  const preview = useNodePreview(dataset.tableName ?? '', isExpanded && !!dataset.tableName)
 
   const handleTableNameDragStart = useCallback(
     (e: React.DragEvent) => {
+      if (!dataset.tableName) return
       e.dataTransfer.setData('text/plain', dataset.tableName)
       e.dataTransfer.effectAllowed = 'copy'
     },
@@ -192,7 +197,7 @@ export const DatasetNode = memo(function DatasetNode({
 
   const placeholderBorderStyle = isPlaceholder ? 'border border-dashed border-[var(--color-warning)]' : undefined
 
-  const formatCount = (n: number | null) => (n === null ? '...' : n.toLocaleString())
+  const formatCount = (n: number | null | undefined) => (typeof n === 'number' ? n.toLocaleString() : '...')
 
   return (
     <NodeShell
@@ -235,7 +240,7 @@ export const DatasetNode = memo(function DatasetNode({
       <NodeContent>
         {isRestorationMode ? (
           <>
-            <div>{dataset.columns.length} columns</div>
+            <div>{dataset.columns?.length ?? 0} columns</div>
             <div className="truncate text-[var(--color-text-secondary)]" title={dataset.fileName}>
               {dataset.fileName}
             </div>
@@ -267,7 +272,7 @@ export const DatasetNode = memo(function DatasetNode({
         ) : isPlaceholder ? (
           <>
             <div className="text-[var(--color-warning)]">No data loaded</div>
-            <div>{dataset.columns.length} columns expected</div>
+            <div>{dataset.columns?.length ?? 0} columns expected</div>
             <button
               type="button"
               onClick={handleSelectFile}
@@ -280,16 +285,18 @@ export const DatasetNode = memo(function DatasetNode({
         ) : (
           <>
             <div className="text-[var(--color-text-secondary)]">
-              {formatCount(dataset.rowCount)} rows · {dataset.columns.length} cols
+              {formatCount(dataset.rowCount)} rows · {dataset.columns?.length ?? 0} cols
             </div>
-            <div
-              draggable
-              onDragStart={handleTableNameDragStart}
-              className="nodrag font-mono text-[10px] truncate text-[var(--color-text-muted)] cursor-grab hover:text-[var(--color-accent)] active:cursor-grabbing"
-              title={`${dataset.tableName} (drag to SQL editor)`}
-            >
-              {dataset.tableName}
-            </div>
+            {dataset.tableName && (
+              <div
+                draggable
+                onDragStart={handleTableNameDragStart}
+                className="nodrag font-mono text-[10px] truncate text-[var(--color-text-muted)] cursor-grab hover:text-[var(--color-accent)] active:cursor-grabbing"
+                title={`${dataset.tableName} (drag to SQL editor)`}
+              >
+                {dataset.tableName}
+              </div>
+            )}
           </>
         )}
       </NodeContent>

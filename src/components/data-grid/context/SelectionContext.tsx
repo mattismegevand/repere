@@ -6,7 +6,7 @@ import {
   selectSelectedCol,
   selectSelectedRow,
   useGridSelectionStore,
-} from '@/stores'
+} from '@/components/data-grid/stores'
 
 export interface SelectionContextValue {
   selection: Selection | null

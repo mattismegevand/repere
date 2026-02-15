@@ -3,8 +3,8 @@ import { useDuckDB } from '@/lib/duckdb'
 import { createExpression } from '@/lib/filter-utils'
 import { usePipeline } from '@/lib/pipeline'
 import { buildPivotPreviewSql, transformPivotData } from '@/lib/pivot/transformPivotData'
-import { usePipelineStore, usePivotStore } from '@/stores'
 import type { PivotValueField } from '@/stores/pivotStore'
+import { usePivotStore } from '@/stores/pivotStore'
 import type { Filter } from '@/types/dataset'
 import type { PivotAggregation } from '@/types/pipeline'
 import { PivotTable } from './PivotTable'
@@ -17,9 +17,11 @@ import type { PivotRow, PivotTableData } from './types'
  */
 export function PivotNodeView() {
   const { client } = useDuckDB()
-  const { activeNode, activeNodeId, applyOperation, openTab, materializeNode } = usePipeline()
-  const { nodes } = usePipelineStore()
-  const { reset, expandAll, collapseAll, expandedGroups } = usePivotStore()
+  const { activeNode, activeNodeId, applyOperation, openTab, materializeNode, nodes } = usePipeline()
+  const reset = usePivotStore((s) => s.reset)
+  const expandAll = usePivotStore((s) => s.expandAll)
+  const collapseAll = usePivotStore((s) => s.collapseAll)
+  const expandedGroups = usePivotStore((s) => s.expandedGroups)
 
   const [data, setData] = useState<PivotTableData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -34,7 +36,7 @@ export function PivotNodeView() {
   const sourceNode = sourceNodeId ? nodes[sourceNodeId] : null
 
   useEffect(() => {
-    if (!client || !activeNode || !sourceNode || !isPivot || operation?.type !== 'pivot') {
+    if (!client || !activeNode || !sourceNode || !sourceNode.tableName || !isPivot || operation?.type !== 'pivot') {
       setData(null)
       setLoading(false)
       return
@@ -45,6 +47,12 @@ export function PivotNodeView() {
       setError(null)
 
       try {
+        const sourceTableName = sourceNode.tableName
+        if (!sourceTableName) {
+          setData(null)
+          return
+        }
+
         const rowFields = operation.rowColumns
         const columnField = operation.pivotColumn ?? null
         const pivotValues = operation.pivotValues ?? []
@@ -62,7 +70,7 @@ export function PivotNodeView() {
 
         // Build and execute the pivot SQL against the source node
         const sql = buildPivotPreviewSql(
-          sourceNode.tableName,
+          sourceTableName,
           rowFields,
           columnField,
           valueFields,

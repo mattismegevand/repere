@@ -136,8 +136,8 @@ export function ShareUrlDialog({ datasets, onGenerate, onClose }: Props) {
             </p>
           )}
           <div className="text-xs text-[var(--color-text-muted)] flex gap-4">
-            {result.compressedSize && <span>Compressed: {formatSize(result.compressedSize)}</span>}
-            {result.uncompressedSize && <span>Uncompressed: {formatSize(result.uncompressedSize)}</span>}
+            {result.compressedSize ? <span>Compressed: {formatSize(result.compressedSize)}</span> : null}
+            {result.uncompressedSize ? <span>Uncompressed: {formatSize(result.uncompressedSize)}</span> : null}
           </div>
         </div>
       </RadixDialog>

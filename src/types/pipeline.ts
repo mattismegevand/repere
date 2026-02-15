@@ -1,5 +1,5 @@
 import type { DashboardConfig } from './dashboard'
-import type { Column, Filter, FilterExpression, Sort } from './dataset'
+import type { Filter, FilterExpression, Sort } from './dataset'
 
 // ============================================
 // NODE TYPES
@@ -15,15 +15,10 @@ interface DataNode {
   id: string
   type: NodeType
   name: string
-  tableName: string // DuckDB table or view name
-  columns: Column[]
-  rowCount: number | null
   createdAt: Date
-  position: { x: number; y: number } // React Flow position
   isDisabled?: boolean // Skip without deleting (grayed out, descendants show error)
   hasError?: boolean // Upstream node is disabled or errored
   errorMessage?: string // Error description
-  isExpanded?: boolean // Show inline data preview on canvas
 }
 
 /**
@@ -44,9 +39,7 @@ export interface Dataset extends DataNode {
  */
 export interface DataView extends DataNode {
   type: 'view'
-  parentIds: string[] // Can have multiple parents (e.g., joins)
   operation: ViewOperation
-  viewSql: string // The CREATE VIEW SQL for recreation/debugging
 }
 
 /**
@@ -55,7 +48,6 @@ export interface DataView extends DataNode {
  */
 export interface ChartNode extends DataNode {
   type: 'chart'
-  parentId: string // Single parent
   config: ChartConfig
 }
 
@@ -65,7 +57,6 @@ export interface ChartNode extends DataNode {
  */
 export interface ExportNode extends DataNode {
   type: 'export'
-  parentId: string // Single parent
   config: ExportConfig
 }
 
@@ -76,10 +67,8 @@ export interface ExportNode extends DataNode {
  */
 export interface DashboardNode extends DataNode {
   type: 'dashboard'
-  parentIds: string[] // Multiple data sources (datasets or views)
   chartRefs: string[] // References to existing ChartNode IDs (imported charts)
   config: DashboardConfig
-  dimensions?: { width: number; height: number } // Resizable dimensions for canvas
 }
 
 /**
@@ -89,12 +78,7 @@ export interface DashboardNode extends DataNode {
  */
 export interface PythonNode extends DataNode {
   type: 'python'
-  parentId: string // Single parent (source data)
   code: string // Python source code
-  outputTableName: string // DuckDB table storing result (separate from tableName for view compatibility)
-  matplotlibOutput?: string // Base64 PNG if matplotlib used
-  executionTimeMs?: number // Last execution time
-  lastExecutedAt?: Date // When the code was last executed
 }
 
 // Union type for any node

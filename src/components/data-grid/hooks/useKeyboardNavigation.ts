@@ -1,14 +1,14 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { isModKey } from '@/lib/platform'
 import {
-  type CommandPalettePage,
-  type DialogState,
   selectSelectedCol,
   selectSelectedRow,
   useGridColumnStore,
   useGridEditingStore,
   useGridSelectionStore,
-} from '@/stores'
+} from '@/components/data-grid/stores'
+import { isModKey } from '@/lib/platform'
+import type { DialogState } from '@/stores/dialogStore'
+import type { CommandPalettePage } from '@/stores/panelStore'
 import type { Column, PipelineNode, Sort } from '@/types'
 
 interface VirtualScrollState {

@@ -133,7 +133,7 @@ export function NodeShell({
       {children}
 
       {/* Corner action - fixed top-right, always visible when expanded */}
-      {cornerAction && <div className="absolute top-2.5 right-2.5 z-10">{cornerAction}</div>}
+      {cornerAction ? <div className="absolute top-2.5 right-2.5 z-10">{cornerAction}</div> : null}
     </div>
   )
 }

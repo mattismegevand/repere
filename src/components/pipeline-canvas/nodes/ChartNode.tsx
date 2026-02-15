@@ -1,22 +1,20 @@
 import * as echarts from 'echarts'
-import {
-  BarChart2,
-  BoxSelect,
-  Combine,
-  Download,
-  Expand,
-  Gauge,
-  GitCompare,
-  GitPullRequestArrow,
-  Grid,
-  Hash,
-  LineChart,
-  type LucideIcon,
-  Pencil,
-  PieChart as PieIcon,
-  ScatterChart,
-  TreesIcon,
-} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import BarChart2 from 'lucide-react/dist/esm/icons/bar-chart-2'
+import BoxSelect from 'lucide-react/dist/esm/icons/box-select'
+import Combine from 'lucide-react/dist/esm/icons/combine'
+import Download from 'lucide-react/dist/esm/icons/download'
+import Expand from 'lucide-react/dist/esm/icons/expand'
+import Gauge from 'lucide-react/dist/esm/icons/gauge'
+import GitCompare from 'lucide-react/dist/esm/icons/git-compare'
+import GitPullRequestArrow from 'lucide-react/dist/esm/icons/git-pull-request-arrow'
+import Grid from 'lucide-react/dist/esm/icons/grid'
+import Hash from 'lucide-react/dist/esm/icons/hash'
+import LineChart from 'lucide-react/dist/esm/icons/line-chart'
+import Pencil from 'lucide-react/dist/esm/icons/pencil'
+import PieIcon from 'lucide-react/dist/esm/icons/pie-chart'
+import ScatterChart from 'lucide-react/dist/esm/icons/scatter-chart'
+import TreesIcon from 'lucide-react/dist/esm/icons/trees-icon'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import {
   BarChart,
@@ -36,13 +34,19 @@ import {
 import { CorrelationMatrix } from '@/components/profiling'
 import { useDuckDB } from '@/lib/duckdb'
 import { useChartData } from '@/lib/duckdb/useChartData'
+import { useHydratedNodes } from '@/lib/pipeline/hooks/useHydratedNodes'
+import type { HydratedNode } from '@/lib/pipeline/hydration'
 import { type CorrelationMatrix as CorrelationData, computeCorrelationMatrix } from '@/lib/profiling/correlation'
-import { useDialogStore, usePanelStore, usePipelineStore } from '@/stores'
-import type { ChartConfig, ChartNode as ChartNodeType, ChartType } from '@/types'
+import { useDialogStore } from '@/stores/dialogStore'
+import { usePanelStore } from '@/stores/panelStore'
+import { usePipelineUiStore } from '@/stores/pipelineUiStore'
+import type { ChartConfig, ChartType } from '@/types'
 import { NodeActionButton, NodeShell } from './shared'
 
+type HydratedChart = Extract<HydratedNode, { type: 'chart' }>
+
 interface ChartNodeData {
-  chart: ChartNodeType
+  chart: HydratedChart
   isActive: boolean
   isSelected: boolean
   isPending?: boolean
@@ -76,9 +80,10 @@ const CHART_SIZE = { width: 320, height: 220 }
 export const ChartNode = memo(function ChartNode({ data }: { data: ChartNodeData }) {
   const { chart, isActive, isSelected, isPending } = data
   const { client } = useDuckDB()
-  const { nodes, dataVersion } = usePipelineStore()
-  const { openChartPanel } = usePanelStore()
-  const { openDialog } = useDialogStore()
+  const nodes = useHydratedNodes()
+  const dataVersion = usePipelineUiStore((s) => s.dataVersion)
+  const openChartPanel = usePanelStore((s) => s.openChartPanel)
+  const openDialog = useDialogStore((s) => s.openDialog)
   const chartRef = useRef<HTMLDivElement>(null)
 
   const chartConfig = chart.config
@@ -171,7 +176,7 @@ export const ChartNode = memo(function ChartNode({ data }: { data: ChartNodeData
     [chart.id, openDialog]
   )
 
-  const formatCount = (n: number | null) => (n === null ? '...' : n.toLocaleString())
+  const formatCount = (n: number | null | undefined) => (typeof n === 'number' ? n.toLocaleString() : '...')
 
   return (
     <NodeShell
@@ -188,7 +193,7 @@ export const ChartNode = memo(function ChartNode({ data }: { data: ChartNodeData
           ref={chartRef}
           className="w-[320px] h-[220px] flex items-center justify-center nopan nodrag bg-[var(--color-bg-primary)]"
         >
-          {isPending !== undefined && <Icon className="w-12 h-12 text-[var(--color-text-muted)] opacity-30" />}
+          {isPending !== undefined ? <Icon className="w-12 h-12 text-[var(--color-text-muted)] opacity-30" /> : null}
           {isPending === undefined && isLoading && (
             <div className="text-xs text-[var(--color-text-muted)]">Loading...</div>
           )}

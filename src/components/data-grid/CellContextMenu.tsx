@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useGridColumnStore, useGridUIStore } from '@/components/data-grid/stores'
 import { formatShortcut } from '@/lib/platform'
-import { useGridColumnStore, useGridUIStore } from '@/stores'
 import { useGridActions } from './context'
 
 export interface CellContextMenuState {

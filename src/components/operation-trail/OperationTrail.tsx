@@ -1,13 +1,14 @@
-import { ChevronRight } from 'lucide-react'
+import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right'
 import { useMemo } from 'react'
 import { usePipeline } from '@/lib/pipeline/usePipeline'
-import { usePipelineStore } from '@/stores'
+import { usePipelineStore } from '@/stores/pipelineStore'
 import type { Dataset, DataView } from '@/types'
 import { OperationChip } from './OperationChip'
 
 export function OperationTrail() {
   const { activeNode, activeNodePath, getNode } = usePipeline()
-  const { setActiveNode, openTab } = usePipelineStore()
+  const setActiveNode = usePipelineStore((s) => s.setActiveNode)
+  const openTab = usePipelineStore((s) => s.openTab)
 
   // Build the path of nodes from root to active
   const pathNodes = useMemo(() => {
@@ -35,7 +36,7 @@ export function OperationTrail() {
     <div className="flex items-center gap-1 px-2 border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)] overflow-x-auto h-[28px]">
       {pathNodes.map((node, index) => (
         <div key={node.id} className="flex items-center shrink-0">
-          {index > 0 && <ChevronRight className="w-3 h-3 text-[var(--color-text-muted)] mx-0.5" />}
+          {index > 0 ? <ChevronRight className="w-3 h-3 text-[var(--color-text-muted)] mx-0.5" /> : null}
           <OperationChip node={node} isActive={node.id === activeNode.id} onClick={() => handleChipClick(node.id)} />
         </div>
       ))}

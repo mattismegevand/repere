@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
-import type { NumberFormat } from '@/stores'
-import type { Column, PipelineNode } from '@/types'
+import type { HydratedNode } from '@/lib/pipeline/hydration'
+import type { NumberFormat } from '@/stores/themeStore'
+import type { Column } from '@/types'
 import { formatCell } from '../formatters'
 
 interface CellMenu {
@@ -11,7 +12,7 @@ interface CellMenu {
 }
 
 interface UseClipboardActionsParams {
-  activeNode: PipelineNode | null
+  activeNode: HydratedNode | null
   visibleColumns: Column[]
   selection: {
     anchorRow: number
@@ -48,7 +49,7 @@ export function useClipboardActions({
     if (!contextMenu) return
     const rowData = getRow(contextMenu.row)
     if (!rowData || !activeNode) return
-    const values = activeNode.columns.map((col) => {
+    const values = visibleColumns.map((col) => {
       const val = rowData[col.name]
       if (val === null || val === undefined) return ''
       if (typeof val === 'string' && (val.includes(',') || val.includes('"') || val.includes('\n'))) {
@@ -58,7 +59,7 @@ export function useClipboardActions({
     })
     await navigator.clipboard.writeText(values.join(','))
     closeAllMenus()
-  }, [contextMenu, activeNode, getRow, closeAllMenus])
+  }, [contextMenu, activeNode, visibleColumns, getRow, closeAllMenus])
 
   // Copy row as JSON from context menu
   const handleCopyRowJson = useCallback(async () => {

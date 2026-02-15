@@ -14,6 +14,7 @@ export const AVAILABLE_MODELS = [
   { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash' },
   { id: 'google/gemini-2.5-pro-preview', name: 'Gemini 2.5 Pro' },
   { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B' },
+  { id: 'z-ai/glm-4.7', name: 'GLM-4.7' },
 ] as const
 
 // OpenRouter API message types

@@ -1,20 +1,21 @@
 import { useCallback, useMemo } from 'react'
 import { getOperationSummary, getOperationUiMeta } from '@/lib/operations/registry'
-import { usePipelineStore } from '@/stores'
-import type { ChartNode, Dataset, DataView, ExportNode, PipelineNode, PythonNode } from '@/types'
+import { useHydratedNodes } from '@/lib/pipeline/hooks/useHydratedNodes'
+import type { HydratedNode } from '@/lib/pipeline/hydration'
+import { usePipelineStore } from '@/stores/pipelineStore'
 
-function getParentId(node: PipelineNode): string | undefined {
+function getParentId(node: HydratedNode): string | undefined {
   if (node.type === 'dataset') return undefined
-  if (node.type === 'chart') return (node as ChartNode).parentId
-  if (node.type === 'export') return (node as ExportNode).parentId
-  if (node.type === 'python') return (node as PythonNode).parentId
+  if (node.type === 'chart') return node.parentId
+  if (node.type === 'export') return node.parentId
+  if (node.type === 'python') return node.parentId
   if (node.type === 'dashboard') return undefined // Dashboard can have multiple parents
-  return (node as DataView).parentIds[0]
+  return node.parentIds[0]
 }
 
-function getRootDatasetName(node: PipelineNode, nodes: Record<string, PipelineNode>): string {
+function getRootDatasetName(node: HydratedNode, nodes: Record<string, HydratedNode>): string {
   if (node.type === 'dataset') {
-    return (node as Dataset).fileName.replace(/\.[^.]+$/, '')
+    return node.fileName.replace(/\.[^.]+$/, '')
   }
 
   const parentId = getParentId(node)
@@ -25,10 +26,9 @@ function getRootDatasetName(node: PipelineNode, nodes: Record<string, PipelineNo
   return 'unknown'
 }
 
-function getOperationLabel(node: PipelineNode): string | null {
+function getOperationLabel(node: HydratedNode): string | null {
   if (node.type !== 'view') return null
-  const view = node as DataView
-  const uiMeta = getOperationUiMeta(view.operation.type)
+  const uiMeta = getOperationUiMeta(node.operation.type)
   return uiMeta.label
 }
 
@@ -37,7 +37,7 @@ function truncateSummary(summary: string, maxLength = 20): string {
   return `${summary.slice(0, maxLength - 1)}…`
 }
 
-function buildTabLabels(openNodeIds: string[], nodes: Record<string, PipelineNode>): Map<string, string> {
+function buildTabLabels(openNodeIds: string[], nodes: Record<string, HydratedNode>): Map<string, string> {
   const results = new Map<string, string>()
 
   // Build initial labels: "filename" for datasets, "filename [Operation]" for views
@@ -48,7 +48,7 @@ function buildTabLabels(openNodeIds: string[], nodes: Record<string, PipelineNod
 
     const base = getRootDatasetName(node, nodes)
     const opLabel = getOperationLabel(node)
-    const summary = node.type === 'view' ? truncateSummary(getOperationSummary((node as DataView).operation)) : ''
+    const summary = node.type === 'view' ? truncateSummary(getOperationSummary(node.operation)) : ''
 
     initialLabels.push({ nodeId, base, opLabel, summary })
   }
@@ -91,7 +91,11 @@ function buildTabLabels(openNodeIds: string[], nodes: Record<string, PipelineNod
 }
 
 export function TabBar() {
-  const { nodes, openNodeIds, activeNodeId, setActiveNode, closeTab } = usePipelineStore()
+  const nodes = useHydratedNodes()
+  const openNodeIds = usePipelineStore((s) => s.openNodeIds)
+  const activeNodeId = usePipelineStore((s) => s.activeNodeId)
+  const setActiveNode = usePipelineStore((s) => s.setActiveNode)
+  const closeTab = usePipelineStore((s) => s.closeTab)
 
   const tabLabels = useMemo(() => buildTabLabels(openNodeIds, nodes), [openNodeIds, nodes])
 

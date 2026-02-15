@@ -4,7 +4,9 @@ import { useDuckDB } from '@/lib/duckdb'
 import { isSessionFile, pickFiles } from '@/lib/file-system'
 import { usePipeline } from '@/lib/pipeline/usePipeline'
 import { formatShortcut } from '@/lib/platform'
-import { useDialogStore, usePanelStore, usePipelineStore } from '@/stores'
+import { useDialogStore } from '@/stores/dialogStore'
+import { usePanelStore } from '@/stores/panelStore'
+import { usePipelineUiStore } from '@/stores/pipelineUiStore'
 import { isTerminalNode } from '@/types'
 import { useCommandPalette } from '../CommandPaletteContext'
 
@@ -20,17 +22,19 @@ const itemWithShortcutClass = `${itemClass} flex justify-between items-center`
 
 export function RootPage() {
   const { client } = useDuckDB()
-  const { openDialog } = useDialogStore()
-  const { openPivotPanel, toggleSqlPanel, setCanvasMode } = usePanelStore()
+  const openDialog = useDialogStore((s) => s.openDialog)
+  const openPivotPanel = usePanelStore((s) => s.openPivotPanel)
+  const toggleSqlPanel = usePanelStore((s) => s.toggleSqlPanel)
+  const setCanvasMode = usePanelStore((s) => s.setCanvasMode)
   const { close, pushPage } = useCommandPalette()
   const { activeNodeId, nodes, loadDatasetFromPicked, openTab, exportSession, loadSession } = usePipeline()
-  const nodeViewTimes = usePipelineStore((s) => s.nodeViewTimes)
+  const nodeViewTimes = usePipelineUiStore((s) => s.nodeViewTimes)
 
   const [showAllNodes, setShowAllNodes] = useState(false)
 
   // Sort nodes by most recently viewed
   const sortedNodes = useMemo(() => {
-    return Object.values(nodes).sort((a, b) => {
+    return [...Object.values(nodes)].sort((a, b) => {
       const timeA = nodeViewTimes[a.id] ?? 0
       const timeB = nodeViewTimes[b.id] ?? 0
       return timeB - timeA // Most recent first

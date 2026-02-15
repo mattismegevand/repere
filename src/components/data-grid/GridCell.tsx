@@ -1,7 +1,8 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useGridUIStore } from '@/components/data-grid/stores'
 import { detectImageType, getCachedDataUrl } from '@/lib/formatters'
-import { useGridUIStore, useQueryStore } from '@/stores'
+import { useQueryStore } from '@/stores/queryStore'
 import type { Column } from '@/types'
 import {
   useColumnStateContext,

@@ -1,9 +1,16 @@
-import { Clipboard, Play, Plus, RotateCcw, Save, X } from 'lucide-react'
+import Clipboard from 'lucide-react/dist/esm/icons/clipboard'
+import Play from 'lucide-react/dist/esm/icons/play'
+import Plus from 'lucide-react/dist/esm/icons/plus'
+import RotateCcw from 'lucide-react/dist/esm/icons/rotate-ccw'
+import Save from 'lucide-react/dist/esm/icons/save'
+import X from 'lucide-react/dist/esm/icons/x'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDuckDB } from '@/lib/duckdb'
+import { useHydratedNodes } from '@/lib/pipeline/hooks/useHydratedNodes'
 import { getPythonService, type PythonExecutionResult, type PythonServiceStatus } from '@/lib/python'
-import { usePanelStore, useThemeStore } from '@/stores'
+import { usePanelStore } from '@/stores/panelStore'
 import { usePipelineStore } from '@/stores/pipelineStore'
+import { useThemeStore } from '@/stores/themeStore'
 import type { PythonNode } from '@/types'
 import { MatplotlibPreview } from './MatplotlibPreview'
 import { PythonEditor, type PythonEditorRef } from './PythonEditor'
@@ -35,7 +42,10 @@ export function PythonPanel() {
   const structureStyle = useThemeStore((s) => s.structureStyle)
   const isClassic = structureStyle === 'classic'
 
-  const { nodes, activeNodeId, addPythonNode, updatePythonNode } = usePipelineStore()
+  const nodes = useHydratedNodes()
+  const activeNodeId = usePipelineStore((s) => s.activeNodeId)
+  const addPythonNode = usePipelineStore((s) => s.addPythonNode)
+  const updatePythonNode = usePipelineStore((s) => s.updatePythonNode)
 
   // Derive Python panel state from discriminated union
   const pythonPanelOpen = activeEditingPanel.type === 'python'
@@ -43,11 +53,11 @@ export function PythonPanel() {
 
   // Use active node as source (like SQL panel)
   const activeNode = activeNodeId ? nodes[activeNodeId] : null
-  const editingNode = editingNodeId ? (nodes[editingNodeId] as PythonNode | undefined) : null
+  const editingNode = editingNodeId ? nodes[editingNodeId] : null
   const isEditing = editingNode?.type === 'python'
 
   // For editing Python nodes, use the parent as source; otherwise use active node
-  const sourceNode = isEditing && editingNode ? nodes[editingNode.parentId] : activeNode
+  const sourceNode = isEditing && editingNode?.parentId ? nodes[editingNode.parentId] : activeNode
 
   const [code, setCode] = useState(DEFAULT_CODE)
   const [executing, setExecuting] = useState(false)
@@ -125,7 +135,7 @@ export function PythonPanel() {
 
   // Execute Python code
   const handleExecute = useCallback(async () => {
-    if (!sourceNode || !code.trim()) return
+    if (!sourceNode || !sourceNode.tableName || !code.trim()) return
 
     setExecuting(true)
     setResult(null)
@@ -149,7 +159,15 @@ export function PythonPanel() {
 
   // Create new Python node
   const handleCreateNode = useCallback(async () => {
-    if (!client || !sourceNode || !result?.success || (!result.outputJson && !result.outputData)) return
+    if (
+      !client ||
+      !sourceNode ||
+      !sourceNode.tableName ||
+      !result?.success ||
+      (!result.outputJson && !result.outputData)
+    ) {
+      return
+    }
 
     setCreating(true)
 
@@ -168,9 +186,10 @@ export function PythonPanel() {
       const columns = await client.describe(tableName)
 
       // Calculate position based on parent
+      const sourcePosition = sourceNode.position ?? { x: 100, y: 100 }
       const position = {
-        x: sourceNode.position.x + 350,
-        y: sourceNode.position.y + 50,
+        x: sourcePosition.x + 350,
+        y: sourcePosition.y + 50,
       }
 
       // Create the Python node
@@ -178,20 +197,24 @@ export function PythonPanel() {
         id: nodeId,
         type: 'python',
         name: `Python: ${sourceNode.name}`,
-        tableName,
-        outputTableName: tableName,
-        columns,
-        rowCount: result.rowCount ?? null,
         createdAt: new Date(),
-        position,
-        parentId: sourceNode.id,
         code,
-        matplotlibOutput: result.matplotlibOutput,
-        executionTimeMs: result.executionTimeMs,
-        lastExecutedAt: new Date(),
       }
 
-      addPythonNode(pythonNode)
+      addPythonNode(
+        pythonNode,
+        sourceNode.id,
+        {
+          tableName,
+          outputTableName: tableName,
+          columns,
+          rowCount: result.rowCount ?? null,
+          matplotlibOutput: result.matplotlibOutput,
+          executionTimeMs: result.executionTimeMs,
+          lastExecutedAt: new Date(),
+        },
+        { position }
+      )
       setPythonPanel(false)
     } catch (error) {
       setResult((prev) =>
@@ -209,7 +232,8 @@ export function PythonPanel() {
 
   // Update existing Python node
   const handleUpdateNode = useCallback(async () => {
-    if (!client || !editingNode || !result?.success || (!result.outputJson && !result.outputData)) return
+    if (!client || !editingNode || editingNode.type !== 'python' || !editingNode.tableName) return
+    if (!result?.success || (!result.outputJson && !result.outputData)) return
 
     setCreating(true)
 

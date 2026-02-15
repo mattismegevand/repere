@@ -1,4 +1,4 @@
-import { GitMerge } from 'lucide-react'
+import GitMerge from 'lucide-react/dist/esm/icons/git-merge'
 import { escapeIdentifier } from '@/lib/duckdb/sql-builder/utils'
 import type { ToolDefinition } from '@/types/ai'
 import type { Column } from '@/types/dataset'
@@ -56,13 +56,55 @@ const toolDefinition: ToolDefinition = {
   },
 }
 
-function validateColumn(column: string, columns: Column[], errors: string[]): boolean {
-  const exists = columns.some((c) => c.name === column)
-  if (!exists) {
+function validateColumn(column: string, columns: Column[], errors: string[]): Column | null {
+  const col = columns.find((c) => c.name === column)
+  if (!col) {
     errors.push(`Column "${column}" does not exist. Available: ${columns.map((c) => c.name).join(', ')}`)
-    return false
+    return null
   }
-  return true
+  return col
+}
+
+function areTypesCompatible(leftType: string, rightType: string): boolean {
+  const normalize = (t: string) => t.toLowerCase().replace(/\(.*\)/, '')
+  const left = normalize(leftType)
+  const right = normalize(rightType)
+
+  // Same type
+  if (left === right) return true
+
+  // Numeric types are compatible with each other
+  const numericTypes = [
+    'integer',
+    'bigint',
+    'decimal',
+    'double',
+    'float',
+    'real',
+    'number',
+    'int',
+    'smallint',
+    'tinyint',
+    'hugeint',
+    'numeric',
+  ]
+  const leftIsNumeric = numericTypes.some((t) => left.includes(t))
+  const rightIsNumeric = numericTypes.some((t) => right.includes(t))
+  if (leftIsNumeric && rightIsNumeric) return true
+
+  // String types are compatible with each other
+  const stringTypes = ['varchar', 'text', 'string', 'char']
+  const leftIsString = stringTypes.some((t) => left.includes(t))
+  const rightIsString = stringTypes.some((t) => right.includes(t))
+  if (leftIsString && rightIsString) return true
+
+  // Date/timestamp types
+  const dateTypes = ['date', 'timestamp', 'datetime']
+  const leftIsDate = dateTypes.some((t) => left.includes(t))
+  const rightIsDate = dateTypes.some((t) => right.includes(t))
+  if (leftIsDate && rightIsDate) return true
+
+  return false
 }
 
 function validate(
@@ -102,8 +144,16 @@ function validate(
     }
 
     for (const c of conditions) {
-      validateColumn(c.leftColumn, columns, errors)
-      validateColumn(c.rightColumn, rightNode.columns, errors)
+      const leftCol = validateColumn(c.leftColumn, columns, errors)
+      const rightCol = validateColumn(c.rightColumn, rightNode.columns, errors)
+
+      // Check for type mismatches in join conditions
+      if (leftCol && rightCol && !areTypesCompatible(leftCol.type, rightCol.type)) {
+        warnings.push(
+          `Type mismatch in join condition: "${c.leftColumn}" (${leftCol.type}) vs "${c.rightColumn}" (${rightCol.type}). ` +
+            `This may cause unexpected results or implicit type casting.`
+        )
+      }
     }
   }
 

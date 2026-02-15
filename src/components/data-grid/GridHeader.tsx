@@ -1,5 +1,5 @@
+import { useGridUIStore } from '@/components/data-grid/stores'
 import type { DuckDBClient } from '@/lib/duckdb/interface'
-import { useGridUIStore } from '@/stores'
 import type { Column, Sort } from '@/types'
 import { ColumnHeader } from './ColumnHeader'
 import type { ColumnStats } from './charts'

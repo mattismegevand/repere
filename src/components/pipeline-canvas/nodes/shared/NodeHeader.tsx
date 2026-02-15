@@ -44,7 +44,7 @@ export function NodeHeader({
   return (
     <div className="px-3 pt-3 pb-2 border-b border-[var(--color-border)]">
       <div className="flex items-center gap-2">
-        {Icon && <Icon className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />}
+        {Icon ? <Icon className="w-3.5 h-3.5 text-[var(--color-text-muted)]" /> : null}
         <span
           className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${BADGE_COLORS[badgeColor]}`}
         >
@@ -55,7 +55,7 @@ export function NodeHeader({
         </span>
 
         {/* Actions - individual buttons control their own visibility */}
-        {actions && <div className="flex items-center gap-0.5">{actions}</div>}
+        {actions ? <div className="flex items-center gap-0.5">{actions}</div> : null}
       </div>
 
       {subtitle && (

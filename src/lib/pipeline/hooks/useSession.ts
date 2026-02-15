@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { computeFileHash } from '@/lib/file-system'
-import { isTauri } from '@/lib/platform'
+import { isNativeRuntime } from '@/lib/runtime'
 import { canUseFileHandles, resolveSession } from '@/lib/sessions/recentSessions'
 import type { RecentSessionEntry, SessionPreview } from '@/lib/sessions/types'
 import {
@@ -16,7 +16,8 @@ import {
 } from '@/lib/storage/idb'
 import { generateShareableUrl, type UrlShareResult } from '@/lib/url-sharing'
 import { usePanelStore } from '@/stores/panelStore'
-import { type DatasetRestorationInfo, type RestorationState, usePipelineStore } from '@/stores/pipelineStore'
+import { usePipelineStore } from '@/stores/pipelineStore'
+import { type DatasetRestorationInfo, type RestorationState, usePipelineUiStore } from '@/stores/pipelineUiStore'
 import { usePipelineServiceOptional } from '../PipelineProvider'
 import {
   deserializeSession,
@@ -31,7 +32,11 @@ import {
 
 export function useSession() {
   const service = usePipelineServiceOptional()
-  const store = usePipelineStore()
+  const updateDatasetRestoration = usePipelineUiStore((s) => s.updateDatasetRestoration)
+  const nodes = usePipelineStore((s) => s.nodes)
+  const edges = usePipelineStore((s) => s.edges)
+  const activeNodeId = usePipelineStore((s) => s.activeNodeId)
+  const openNodeIds = usePipelineStore((s) => s.openNodeIds)
 
   const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -55,9 +60,9 @@ export function useSession() {
       const filename = currentNode?.name ? `${currentNode.name}.repere` : 'session.repere'
 
       // Get or generate session ID for this export
-      let sessionId = state.currentSessionId
+      let sessionId = usePipelineUiStore.getState().currentSessionId
       if (!sessionId) {
-        sessionId = usePipelineStore.getState().generateNewSessionId()
+        sessionId = usePipelineUiStore.getState().generateNewSessionId()
         usePanelStore.getState().setCurrentSessionId(sessionId)
       }
 
@@ -71,7 +76,7 @@ export function useSession() {
       // Save blob to IDB for recent session access
       await saveSessionBlob(sessionId, blob)
 
-      if (isTauri()) {
+      if (isNativeRuntime()) {
         // Desktop: save to file system
         const savedPath = await downloadSession(blob, filename)
         if (savedPath) {
@@ -190,7 +195,7 @@ export function useSession() {
 
         if (sessionData.requiredFiles.length > 0) {
           // Store the blob for later restoration
-          store.enterLoadingMode(sessionData, new Map())
+          usePipelineUiStore.getState().enterLoadingMode(sessionData, new Map())
           await savePendingSession(sessionFile)
           return { success: false, needsFiles: true, requiredFiles: sessionData.requiredFiles }
         }
@@ -203,7 +208,7 @@ export function useSession() {
         return { success: false }
       }
     },
-    [service, store]
+    [service]
   )
 
   const openRecentSession = useCallback(
@@ -233,7 +238,7 @@ export function useSession() {
 
       // Set the current session ID to continue updating the same session
       if (entry.ref.sessionId) {
-        usePipelineStore.getState().setCurrentSessionId(entry.ref.sessionId)
+        usePipelineUiStore.getState().setCurrentSessionId(entry.ref.sessionId)
         usePanelStore.getState().setCurrentSessionId(entry.ref.sessionId)
       }
 
@@ -248,35 +253,32 @@ export function useSession() {
   // RESTORATION MODE
   // ============================================
 
-  const startRestorationMode = useCallback(
-    (session: SessionData) => {
-      const datasets = new Map<string, DatasetRestorationInfo>()
+  const startRestorationMode = useCallback((session: SessionData) => {
+    const datasets = new Map<string, DatasetRestorationInfo>()
 
-      for (const node of Object.values(session.nodes)) {
-        if (node.type === 'dataset') {
-          const isEmbedded = session.embeddedFiles.has(node.id)
-          const requiredFile = session.requiredFiles.find((r) => r.nodeId === node.id)
+    for (const node of Object.values(session.nodes)) {
+      if (node.type === 'dataset') {
+        const isEmbedded = session.embeddedFiles.has(node.id)
+        const requiredFile = session.requiredFiles.find((r) => r.nodeId === node.id)
 
-          datasets.set(node.id, {
-            nodeId: node.id,
-            fileName: node.fileName,
-            status: isEmbedded ? 'embedded' : 'required',
-            expectedColumns: requiredFile?.expectedColumns ?? node.columns,
-            expectedHash: requiredFile?.fileHash ?? node.fileHash,
-          })
-        }
+        datasets.set(node.id, {
+          nodeId: node.id,
+          fileName: node.fileName,
+          status: isEmbedded ? 'embedded' : 'required',
+          expectedColumns: requiredFile?.expectedColumns ?? node.columns,
+          expectedHash: requiredFile?.fileHash ?? node.fileHash,
+        })
       }
+    }
 
-      const restorationState: RestorationState = {
-        session,
-        datasets,
-        skippedDatasets: new Set(),
-      }
+    const restorationState: RestorationState = {
+      session,
+      datasets,
+      skippedDatasets: new Set(),
+    }
 
-      store.enterRestorationMode(restorationState)
-    },
-    [store]
-  )
+    usePipelineUiStore.getState().enterRestorationMode(restorationState)
+  }, [])
 
   const provideFileForRestoration = useCallback(
     async (nodeId: string, file: File): Promise<SchemaValidationResult> => {
@@ -284,7 +286,7 @@ export function useSession() {
         return { valid: false, missingColumns: [], typeMismatches: [] }
       }
 
-      const restorationState = usePipelineStore.getState().restorationState
+      const restorationState = usePipelineUiStore.getState().restorationState
       if (!restorationState) {
         return { valid: false, missingColumns: [], typeMismatches: [] }
       }
@@ -294,7 +296,7 @@ export function useSession() {
         return { valid: false, missingColumns: [], typeMismatches: [] }
       }
 
-      store.updateDatasetRestoration(nodeId, { status: 'validating', file })
+      updateDatasetRestoration(nodeId, { status: 'validating', file })
 
       try {
         const fileColumns = await service.extractFileSchema(file)
@@ -307,14 +309,14 @@ export function useSession() {
             isExactMatch = providedHash === datasetInfo.expectedHash
           }
 
-          store.updateDatasetRestoration(nodeId, {
+          updateDatasetRestoration(nodeId, {
             status: 'provided',
             file,
             validationResult: result,
             isExactMatch,
           })
         } else {
-          store.updateDatasetRestoration(nodeId, {
+          updateDatasetRestoration(nodeId, {
             status: 'error',
             file,
             validationResult: result,
@@ -328,7 +330,7 @@ export function useSession() {
           missingColumns: [],
           typeMismatches: [],
         }
-        store.updateDatasetRestoration(nodeId, {
+        updateDatasetRestoration(nodeId, {
           status: 'error',
           file,
           validationResult: errorResult,
@@ -336,13 +338,13 @@ export function useSession() {
         return errorResult
       }
     },
-    [service, store]
+    [service, updateDatasetRestoration]
   )
 
   const completeRestoration = useCallback(async (): Promise<boolean> => {
     if (!service) return false
 
-    const currentRestorationState = usePipelineStore.getState().restorationState
+    const currentRestorationState = usePipelineUiStore.getState().restorationState
     if (!currentRestorationState) return false
 
     const providedFiles = new Map<string, File>()
@@ -359,7 +361,7 @@ export function useSession() {
 
     try {
       await clearAllAndRestore(currentRestorationState.session, providedFiles, placeholderIds)
-      store.exitRestorationMode()
+      usePipelineUiStore.getState().exitRestorationMode()
       await clearDraft()
       await clearPendingSession()
       return true
@@ -367,15 +369,15 @@ export function useSession() {
       console.error('Failed to restore session:', err)
       return false
     }
-  }, [service, store])
+  }, [service])
 
   const cancelRestoration = useCallback(async () => {
-    store.exitRestorationMode()
+    usePipelineUiStore.getState().exitRestorationMode()
     await clearPendingSession()
-  }, [store])
+  }, [])
 
   const isRestorationReady = useCallback((): boolean => {
-    const restorationState = usePipelineStore.getState().restorationState
+    const restorationState = usePipelineUiStore.getState().restorationState
     if (!restorationState) return false
 
     for (const [nodeId, info] of restorationState.datasets) {
@@ -390,7 +392,7 @@ export function useSession() {
   }, [])
 
   const getRestorationProgress = useCallback((): { provided: number; required: number } => {
-    const restorationState = usePipelineStore.getState().restorationState
+    const restorationState = usePipelineUiStore.getState().restorationState
     if (!restorationState) return { provided: 0, required: 0 }
 
     let provided = 0
@@ -474,14 +476,14 @@ export function useSession() {
 
   const restorePendingSession = useCallback(async (blob: Blob): Promise<void> => {
     const data = await deserializeSession(blob)
-    usePipelineStore.getState().enterLoadingMode(data, new Map())
+    usePipelineUiStore.getState().enterLoadingMode(data, new Map())
   }, [])
 
   const continuePendingSession = useCallback(
     async (providedFiles: Map<string, File>, skippedIds: Set<string>): Promise<boolean> => {
       if (!service) return false
 
-      const pendingSession = usePipelineStore.getState().pendingSession
+      const pendingSession = usePipelineUiStore.getState().pendingSession
       if (!pendingSession) return false
 
       let data = pendingSession.data
@@ -491,7 +493,7 @@ export function useSession() {
       }
 
       if (Object.keys(data.nodes).length === 0) {
-        store.exitLoadingMode()
+        usePipelineUiStore.getState().exitLoadingMode()
         await clearPendingSession()
         return true
       }
@@ -507,20 +509,20 @@ export function useSession() {
         await clearAllAndRestore(data, providedFiles)
         await clearDraft()
         await clearPendingSession()
-        store.exitLoadingMode()
+        usePipelineUiStore.getState().exitLoadingMode()
         return true
       } catch (err) {
         console.error('Failed to restore session:', err)
         return false
       }
     },
-    [service, store]
+    [service]
   )
 
   const cancelPendingSession = useCallback(async () => {
-    store.exitLoadingMode()
+    usePipelineUiStore.getState().exitLoadingMode()
     await clearPendingSession()
-  }, [store])
+  }, [])
 
   // ============================================
   // AUTO-SAVE
@@ -543,16 +545,16 @@ export function useSession() {
 
       // Get or generate session ID
       // First check pipelineStore (in-memory), then panelStore (persisted)
-      let sessionId = state.currentSessionId
+      let sessionId = usePipelineUiStore.getState().currentSessionId
       if (!sessionId) {
         sessionId = usePanelStore.getState().currentSessionId
         if (sessionId) {
           // Restore the persisted session ID to pipelineStore
-          usePipelineStore.getState().setCurrentSessionId(sessionId)
+          usePipelineUiStore.getState().setCurrentSessionId(sessionId)
         }
       }
       if (!sessionId) {
-        sessionId = usePipelineStore.getState().generateNewSessionId()
+        sessionId = usePipelineUiStore.getState().generateNewSessionId()
         // Also persist to panelStore
         usePanelStore.getState().setCurrentSessionId(sessionId)
       }
@@ -603,7 +605,7 @@ export function useSession() {
         clearTimeout(autoSaveTimeoutRef.current)
       }
     }
-  }, [service, store.nodes, store.edges, store.activeNodeId, store.openNodeIds, performSave])
+  }, [service, nodes, edges, activeNodeId, openNodeIds, performSave])
 
   // ============================================
   // INTERNAL HELPERS

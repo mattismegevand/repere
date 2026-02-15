@@ -1,12 +1,21 @@
-import { Eye, EyeOff, Pencil } from 'lucide-react'
+import Eye from 'lucide-react/dist/esm/icons/eye'
+import EyeOff from 'lucide-react/dist/esm/icons/eye-off'
+import Pencil from 'lucide-react/dist/esm/icons/pencil'
 import { memo, useCallback } from 'react'
 import { useNodePreview } from '@/lib/duckdb/useNodePreview'
 import { getOperationUiMeta } from '@/lib/operations/registry'
+import { openOperationEditor } from '@/lib/operations/ui'
+import type { HydratedNode } from '@/lib/pipeline/hydration'
 import { getOperationSummary } from '@/lib/pipeline/operation-summary'
-import { useDialogStore, usePanelStore, usePipelineStore, usePivotStore } from '@/stores'
-import type { DataView, JoinOperation, PivotOperation } from '@/types'
+import { useDialogStore } from '@/stores/dialogStore'
+import { usePanelStore } from '@/stores/panelStore'
+import { usePipelineStore } from '@/stores/pipelineStore'
+import { usePivotStore } from '@/stores/pivotStore'
+import type { JoinOperation } from '@/types'
 import type { TypeBadgeColor } from './shared'
 import { ExpandablePreview, NodeActionButton, NodeContent, NodeHeader, NodeShell } from './shared'
+
+type HydratedView = Extract<HydratedNode, { type: 'view' }>
 
 // Venn diagram SVG for join types
 function JoinVenn({ type }: { type: JoinOperation['joinType'] }) {
@@ -72,13 +81,13 @@ function JoinSummary({ operation }: { operation: JoinOperation }) {
     <span className="flex items-center">
       <JoinVenn type={operation.joinType} />
       <span className="uppercase">{operation.joinType}</span>
-      {conditions && <span className="ml-1 normal-case">: {conditions}</span>}
+      {conditions ? <span className="ml-1 normal-case">: {conditions}</span> : null}
     </span>
   )
 }
 
 interface ViewNodeData {
-  view: DataView
+  view: HydratedView
   isActive: boolean
   isSelected: boolean
   isPending?: boolean
@@ -89,17 +98,20 @@ interface ViewNodeData {
 export const ViewNode = memo(function ViewNode({ data, selected }: { data: ViewNodeData; selected?: boolean }) {
   const { view, isActive, isSelected, isPending, pendingParentNames } = data
   const isNodeSelected = isSelected || selected
-  const { setFilterEditor, openPivotPanel, openSqlPanelForNode, setCanvasMode } = usePanelStore()
-  const { openDialog } = useDialogStore()
-  const { loadFromOperation } = usePivotStore()
-  const { toggleNodeExpanded } = usePipelineStore()
+  const setFilterEditor = usePanelStore((s) => s.setFilterEditor)
+  const openPivotPanel = usePanelStore((s) => s.openPivotPanel)
+  const openSqlPanelForNode = usePanelStore((s) => s.openSqlPanelForNode)
+  const setCanvasMode = usePanelStore((s) => s.setCanvasMode)
+  const openDialog = useDialogStore((s) => s.openDialog)
+  const loadFromOperation = usePivotStore((s) => s.loadFromOperation)
+  const toggleNodeExpanded = usePipelineStore((s) => s.toggleNodeExpanded)
 
   const uiMeta = getOperationUiMeta(view.operation.type)
   const canEdit = uiMeta.editable && !isPending
   const isExpanded = !!view.isExpanded && !isPending && !view.isDisabled
   const canExpand = !isPending && !view.isDisabled && view.rowCount !== 0
 
-  const preview = useNodePreview(view.tableName, isExpanded)
+  const preview = useNodePreview(view.tableName ?? '', isExpanded && !!view.tableName)
 
   const operationSummary =
     view.operation.type === 'join' ? (
@@ -109,26 +121,21 @@ export const ViewNode = memo(function ViewNode({ data, selected }: { data: ViewN
     )
 
   const handleDragStart = (e: React.DragEvent) => {
+    if (!view.tableName) return
     e.dataTransfer.setData('text/plain', view.tableName)
     e.dataTransfer.effectAllowed = 'copy'
   }
 
   const handleEdit = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (view.operation.type === 'filter') {
-      setFilterEditor(true)
-    } else if (view.operation.type === 'pivot') {
-      loadFromOperation(view.operation as PivotOperation)
-      const parentId = view.parentIds[0]
-      if (parentId) {
-        setCanvasMode(false)
-        openPivotPanel(parentId, view.id)
-      }
-    } else if (view.operation.type === 'sql') {
-      openSqlPanelForNode(view.id)
-    } else if (view.operation.type === 'union') {
-      openDialog({ type: 'union', preSelectedNodes: [], editingNodeId: view.id })
-    }
+    openOperationEditor(view, uiMeta, {
+      setFilterEditor,
+      openPivotPanel,
+      openSqlPanelForNode,
+      openDialog,
+      loadPivotFromOperation: loadFromOperation,
+      setCanvasMode,
+    })
   }
 
   const handleToggleExpand = useCallback(
@@ -139,7 +146,7 @@ export const ViewNode = memo(function ViewNode({ data, selected }: { data: ViewN
     [view.id, toggleNodeExpanded]
   )
 
-  const formatCount = (n: number | null) => (n === null ? '...' : n.toLocaleString())
+  const formatCount = (n: number | null | undefined) => (typeof n === 'number' ? n.toLocaleString() : '...')
 
   return (
     <NodeShell
@@ -158,7 +165,7 @@ export const ViewNode = memo(function ViewNode({ data, selected }: { data: ViewN
         actions={
           (canEdit || canExpand) && (
             <>
-              {canEdit && <NodeActionButton icon={Pencil} onClick={handleEdit} title="Edit operation" />}
+              {canEdit ? <NodeActionButton icon={Pencil} onClick={handleEdit} title="Edit operation" /> : null}
               {canExpand && (
                 <NodeActionButton
                   icon={isExpanded ? EyeOff : Eye}
@@ -182,25 +189,27 @@ export const ViewNode = memo(function ViewNode({ data, selected }: { data: ViewN
             </div>
           </>
         ) : view.isDisabled ? (
-          <div className="text-gray-500">Disabled · {view.columns.length} cols</div>
+          <div className="text-gray-500">Disabled · {view.columns?.length ?? 0} cols</div>
         ) : view.hasError ? (
           <>
             <div className="text-red-500 truncate">{view.errorMessage || 'Error'}</div>
-            <div className="text-[var(--color-text-secondary)]">{view.columns.length} cols</div>
+            <div className="text-[var(--color-text-secondary)]">{view.columns?.length ?? 0} cols</div>
           </>
         ) : (
           <>
             <div className="text-[var(--color-text-secondary)]">
-              {formatCount(view.rowCount)} rows · {view.columns.length} cols
+              {formatCount(view.rowCount)} rows · {view.columns?.length ?? 0} cols
             </div>
-            <div
-              draggable
-              onDragStart={handleDragStart}
-              className="nodrag font-mono text-[10px] truncate text-[var(--color-text-muted)] cursor-grab hover:text-[var(--color-accent)] active:cursor-grabbing"
-              title={`${view.tableName} (drag to SQL editor)`}
-            >
-              {view.tableName}
-            </div>
+            {view.tableName && (
+              <div
+                draggable
+                onDragStart={handleDragStart}
+                className="nodrag font-mono text-[10px] truncate text-[var(--color-text-muted)] cursor-grab hover:text-[var(--color-accent)] active:cursor-grabbing"
+                title={`${view.tableName} (drag to SQL editor)`}
+              >
+                {view.tableName}
+              </div>
+            )}
           </>
         )}
       </NodeContent>

@@ -11,6 +11,8 @@ export type OperationColor = 'blue' | 'green' | 'amber' | 'purple' | 'orange' | 
 /**
  * UI metadata for displaying operations in nodes, chips, and menus
  */
+export type OperationEditor = { type: 'filter' } | { type: 'pivot' } | { type: 'sql' } | { type: 'union' }
+
 export interface OperationUiMeta {
   /** Human-readable label (e.g., "Filter", "Add Column") */
   label: string
@@ -20,6 +22,8 @@ export interface OperationUiMeta {
   color: OperationColor
   /** Whether this operation can be edited after creation */
   editable: boolean
+  /** Optional UI editor mapping */
+  editor?: OperationEditor
 }
 
 /**

@@ -1,7 +1,7 @@
 import { Command } from 'cmdk'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { isModKey } from '@/lib/platform'
-import { usePanelStore } from '@/stores'
+import { usePanelStore } from '@/stores/panelStore'
 import { CommandPaletteProvider, useCommandPalette } from './CommandPaletteContext'
 import { FilterOperatorPage } from './pages/FilterOperatorPage'
 import { FilterPage } from './pages/FilterPage'
@@ -102,7 +102,7 @@ function CommandPaletteContent() {
         />
       )}
       {/* Hidden input for keyboard navigation on pages without search */}
-      {needsHiddenInput && <Command.Input ref={inputRef} className="sr-only" autoFocus aria-hidden="true" />}
+      {needsHiddenInput ? <Command.Input ref={inputRef} className="sr-only" autoFocus aria-hidden="true" /> : null}
 
       {/* Page Router */}
       {page.type === 'root' && (
@@ -114,22 +114,24 @@ function CommandPaletteContent() {
         </Command.List>
       )}
 
-      {page.type === 'filter' && !page.column && <FilterPage />}
+      {page.type === 'filter' && !page.column ? <FilterPage /> : null}
 
-      {page.type === 'filter' && page.column && !page.operator && <FilterOperatorPage />}
+      {page.type === 'filter' && page.column && !page.operator ? <FilterOperatorPage /> : null}
 
-      {page.type === 'filter' && page.column && page.operator && <FilterValuePage />}
+      {page.type === 'filter' && page.column && page.operator ? <FilterValuePage /> : null}
 
-      {page.type === 'sort' && !page.column && <SortPage />}
+      {page.type === 'sort' && !page.column ? <SortPage /> : null}
 
-      {page.type === 'sort' && page.column && <SortDirectionPage />}
+      {page.type === 'sort' && page.column ? <SortDirectionPage /> : null}
     </Command>
   )
 }
 
 export function CommandPalette() {
-  const { commandPaletteOpen, commandPaletteInitialPage, setCommandPalette, clearCommandPaletteInitialPage } =
-    usePanelStore()
+  const commandPaletteOpen = usePanelStore((s) => s.commandPaletteOpen)
+  const commandPaletteInitialPage = usePanelStore((s) => s.commandPaletteInitialPage)
+  const setCommandPalette = usePanelStore((s) => s.setCommandPalette)
+  const clearCommandPaletteInitialPage = usePanelStore((s) => s.clearCommandPaletteInitialPage)
 
   const handleClose = useCallback(() => {
     setCommandPalette(false)

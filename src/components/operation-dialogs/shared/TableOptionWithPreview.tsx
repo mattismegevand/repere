@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MiniTable } from '@/components/pipeline-canvas/nodes/MiniTable'
 import { useDuckDB } from '@/lib/duckdb'
-import type { PipelineNode } from '@/types'
+import type { HydratedNode } from '@/lib/pipeline/hydration'
 
 interface TableOptionWithPreviewProps {
-  node: PipelineNode
+  node: HydratedNode
   selected: boolean
   onSelect: () => void
   inputType: 'radio' | 'checkbox'
@@ -16,7 +16,7 @@ function escapeIdentifier(name: string): string {
   return `"${name.replace(/"/g, '""')}"`
 }
 
-function getNodeBadge(node: PipelineNode) {
+function getNodeBadge(node: HydratedNode) {
   const isDataset = node.type === 'dataset'
   return (
     <span className="flex items-center gap-2">
@@ -29,7 +29,7 @@ function getNodeBadge(node: PipelineNode) {
       </span>
       <span className="truncate">{node.name}</span>
       <span className="text-[var(--color-text-muted)] text-[10px]">
-        {node.columns.length} cols · {node.rowCount?.toLocaleString() ?? '?'} rows
+        {node.columns?.length ?? 0} cols · {node.rowCount?.toLocaleString() ?? '?'} rows
       </span>
     </span>
   )
@@ -56,16 +56,18 @@ export function TableOptionWithPreview({
 
   // Fetch preview data when hovering
   useEffect(() => {
-    if (!isHovered || !client) {
+    if (!isHovered || !client || !node.tableName) {
       setPreviewData({ rows: [], loading: false, error: null })
       return
     }
 
     setPreviewData((p) => ({ ...p, loading: true, error: null }))
+    const tableName = node.tableName
+    if (!tableName) return
 
     const fetchPreview = async () => {
       try {
-        const query = `SELECT * FROM ${escapeIdentifier(node.tableName)} LIMIT 10`
+        const query = `SELECT * FROM ${escapeIdentifier(tableName)} LIMIT 10`
         const result = await client.query(query)
         setPreviewData({ rows: result.rows, loading: false, error: null })
       } catch (err) {
@@ -182,7 +184,7 @@ export function TableOptionWithPreview({
             <div style={{ height: 'calc(100% - 28px)' }}>
               <MiniTable
                 rows={previewData.rows}
-                columns={node.columns}
+                columns={node.columns ?? []}
                 loading={previewData.loading}
                 error={previewData.error}
               />

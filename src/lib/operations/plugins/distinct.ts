@@ -1,4 +1,4 @@
-import { Scissors } from 'lucide-react'
+import Scissors from 'lucide-react/dist/esm/icons/scissors'
 import { escapeIdentifier } from '@/lib/duckdb/sql-builder/utils'
 import type { ToolDefinition } from '@/types/ai'
 import type { Column } from '@/types/dataset'

@@ -1,4 +1,5 @@
-import type { Column, DataView, PipelineNode, SqlQueryOperation, ViewOperation } from '@/types'
+import type { DataView, PipelineNode, SqlQueryOperation, ViewOperation } from '@/types'
+import type { NodeRuntime, RuntimeColumn } from '@/types/pipelineRuntime'
 import type { DuckDBClient } from './interface'
 import {
   buildCreateViewSql,
@@ -37,10 +38,25 @@ function extractBaseName(tableName: string): string {
   return tableName
 }
 
+export interface ViewSource {
+  node: PipelineNode
+  runtime: NodeRuntime
+}
+
+export interface ViewCreationResult {
+  view: DataView
+  runtime: NodeRuntime
+  parentIds: string[]
+}
+
+export interface ViewUpdateResult {
+  runtime: NodeRuntime
+}
+
 /**
  * Get schema (columns) for a view/table
  */
-export async function getViewSchema(client: DuckDBClient, viewName: string): Promise<Column[]> {
+export async function getViewSchema(client: DuckDBClient, viewName: string): Promise<RuntimeColumn[]> {
   return client.describe(viewName)
 }
 
@@ -56,27 +72,36 @@ export async function getViewRowCount(client: DuckDBClient, viewName: string): P
  */
 export async function createView(
   client: DuckDBClient,
-  parentNode: PipelineNode,
+  parent: ViewSource,
   operation: ViewOperation,
-  additionalSources?: Record<string, { node: PipelineNode }>,
-  position?: { x: number; y: number }
-): Promise<DataView> {
-  const parentBaseName = extractBaseName(parentNode.tableName)
+  additionalSources?: Record<string, ViewSource>
+): Promise<ViewCreationResult> {
+  const parentTableName = parent.runtime.tableName
+  const parentColumns = parent.runtime.columns
+
+  if (!parentTableName || !parentColumns) {
+    throw new Error('Missing parent runtime data for view creation')
+  }
+
+  const parentBaseName = extractBaseName(parentTableName)
   const viewName = generateViewName(operation.type, parentBaseName)
 
   // Build context for SQL generation
   const context: OperationContext = {
-    sourceTableName: parentNode.tableName,
-    sourceColumns: parentNode.columns,
+    sourceTableName: parentTableName,
+    sourceColumns: parentColumns,
   }
 
   // Add additional sources for joins/unions
   if (additionalSources) {
     context.additionalSources = {}
     for (const [id, info] of Object.entries(additionalSources)) {
+      if (!info.runtime.tableName || !info.runtime.columns) {
+        throw new Error(`Missing runtime data for additional source ${id}`)
+      }
       context.additionalSources[id] = {
-        tableName: info.node.tableName,
-        columns: info.node.columns,
+        tableName: info.runtime.tableName,
+        columns: info.runtime.columns,
       }
     }
   }
@@ -90,7 +115,7 @@ export async function createView(
   const columns = await getViewSchema(client, viewName)
 
   // Determine parent IDs
-  const parentIds = [parentNode.id]
+  const parentIds = [parent.node.id]
   if (operation.type === 'join') {
     const joinOp = operation as { rightSourceId: string }
     parentIds.push(joinOp.rightSourceId)
@@ -101,23 +126,23 @@ export async function createView(
 
   // Generate descriptive name
   const operationName = getOperationDisplayName(operation.type)
-  const name = `${parentNode.name} → ${operationName}`
+  const name = `${parent.node.name} → ${operationName}`
 
   return {
-    id: viewName,
-    type: 'view',
-    name,
-    tableName: viewName,
-    columns,
-    rowCount: null, // Fetched async by caller
-    createdAt: new Date(),
-    position: position ?? {
-      x: parentNode.position.x + 300,
-      y: parentNode.position.y,
+    view: {
+      id: viewName,
+      type: 'view',
+      name,
+      createdAt: new Date(),
+      operation,
+    },
+    runtime: {
+      tableName: viewName,
+      columns,
+      rowCount: null, // Fetched async by caller
+      viewSql: sql,
     },
     parentIds,
-    operation,
-    viewSql: sql,
   }
 }
 
@@ -129,41 +154,56 @@ export async function updateView(
   client: DuckDBClient,
   existingView: DataView,
   newViewOperation: ViewOperation,
-  parentNode: PipelineNode,
-  additionalSources?: Record<string, { node: PipelineNode }>
-): Promise<DataView> {
+  existingRuntime: NodeRuntime,
+  parent: ViewSource,
+  additionalSources?: Record<string, ViewSource>
+): Promise<ViewUpdateResult> {
+  const viewName = existingRuntime.tableName
+  const parentTableName = parent.runtime.tableName
+  const parentColumns = parent.runtime.columns
+
+  if (!viewName) {
+    throw new Error(`Missing runtime tableName for view ${existingView.id}`)
+  }
+  if (!parentTableName || !parentColumns) {
+    throw new Error('Missing parent runtime data for view update')
+  }
+
   // Build context for SQL generation
   const context: OperationContext = {
-    sourceTableName: parentNode.tableName,
-    sourceColumns: parentNode.columns,
+    sourceTableName: parentTableName,
+    sourceColumns: parentColumns,
   }
 
   // Add additional sources for joins/unions
   if (additionalSources) {
     context.additionalSources = {}
     for (const [id, info] of Object.entries(additionalSources)) {
+      if (!info.runtime.tableName || !info.runtime.columns) {
+        throw new Error(`Missing runtime data for additional source ${id}`)
+      }
       context.additionalSources[id] = {
-        tableName: info.node.tableName,
-        columns: info.node.columns,
+        tableName: info.runtime.tableName,
+        columns: info.runtime.columns,
       }
     }
   }
 
   // Build and execute CREATE OR REPLACE VIEW
   const selectSql = buildOperationSql(newViewOperation, context)
-  const sql = `CREATE OR REPLACE VIEW ${escapeIdentifier(existingView.tableName)} AS ${selectSql}`
+  const sql = `CREATE OR REPLACE VIEW ${escapeIdentifier(viewName)} AS ${selectSql}`
   await client.execute(sql)
 
   // Get the updated schema (row count fetched async by caller)
-  const columns = await getViewSchema(client, existingView.tableName)
+  const columns = await getViewSchema(client, viewName)
 
-  // Return updated view with same ID, position, but new operation/schema
   return {
-    ...existingView,
-    columns,
-    rowCount: null, // Fetched async by caller
-    operation: newViewOperation,
-    viewSql: sql,
+    runtime: {
+      tableName: viewName,
+      columns,
+      rowCount: null,
+      viewSql: sql,
+    },
   }
 }
 
@@ -194,19 +234,21 @@ export async function createSqlQueryView(
   client: DuckDBClient,
   sql: string,
   nodes: Record<string, PipelineNode>,
-  position?: { x: number; y: number }
-): Promise<DataView> {
+  runtimeById: Record<string, NodeRuntime>
+): Promise<ViewCreationResult> {
   // Extract table names to find parent nodes
   const referencedTables = extractTableNames(sql)
   const parentNodes: PipelineNode[] = []
   for (const node of Object.values(nodes)) {
-    if (referencedTables.includes(node.tableName)) {
+    const tableName = runtimeById[node.id]?.tableName
+    if (tableName && referencedTables.includes(tableName)) {
       parentNodes.push(node)
     }
   }
 
   // Use first parent's base name for the view name
-  const parentBaseName = parentNodes.length > 0 ? extractBaseName(parentNodes[0].tableName) : undefined
+  const firstParentRuntime = parentNodes.length > 0 ? runtimeById[parentNodes[0].id] : undefined
+  const parentBaseName = firstParentRuntime?.tableName ? extractBaseName(firstParentRuntime.tableName) : undefined
   const viewName = generateViewName('sql', parentBaseName)
 
   // Create the view
@@ -216,12 +258,6 @@ export async function createSqlQueryView(
   // Get schema (row count fetched async by caller to avoid blocking)
   const columns = await getViewSchema(client, viewName)
 
-  // Calculate position (offset from first parent or center of canvas)
-  const defaultPosition = { x: 400, y: 200 }
-  const calcPosition =
-    position ??
-    (parentNodes.length > 0 ? { x: parentNodes[0].position.x + 300, y: parentNodes[0].position.y } : defaultPosition)
-
   const operation: SqlQueryOperation = {
     type: 'sql',
     sql,
@@ -229,17 +265,20 @@ export async function createSqlQueryView(
   }
 
   return {
-    id: viewName,
-    type: 'view',
-    name: `SQL Query`,
-    tableName: viewName,
-    columns,
-    rowCount: null, // Fetched async by caller
-    createdAt: new Date(),
-    position: calcPosition,
+    view: {
+      id: viewName,
+      type: 'view',
+      name: `SQL Query`,
+      createdAt: new Date(),
+      operation,
+    },
+    runtime: {
+      tableName: viewName,
+      columns,
+      rowCount: null,
+      viewSql: createSql,
+    },
     parentIds: parentNodes.map((n) => n.id),
-    operation,
-    viewSql: createSql,
   }
 }
 

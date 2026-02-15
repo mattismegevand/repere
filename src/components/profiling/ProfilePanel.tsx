@@ -1,9 +1,14 @@
-import { ChevronDown, ChevronRight, Plus, X } from 'lucide-react'
+import ChevronDown from 'lucide-react/dist/esm/icons/chevron-down'
+import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right'
+import Plus from 'lucide-react/dist/esm/icons/plus'
+import X from 'lucide-react/dist/esm/icons/x'
 import { useCallback, useEffect, useState } from 'react'
 import { useDuckDB } from '@/lib/duckdb'
+import { usePipeline } from '@/lib/pipeline/usePipeline'
 import { type ColumnStats, profileDataset } from '@/lib/profiling'
 import { type CorrelationMatrix as CorrelationData, computeCorrelationMatrix } from '@/lib/profiling/correlation'
-import { selectActiveNode, usePanelStore, usePipelineStore, useThemeStore } from '@/stores'
+import { usePanelStore } from '@/stores/panelStore'
+import { useThemeStore } from '@/stores/themeStore'
 import { ColumnCard } from './ColumnCard'
 import { CorrelationMatrix } from './CorrelationMatrix'
 
@@ -32,7 +37,9 @@ function CollapsibleSection({ title, count, defaultOpen = true, children }: Coll
         <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-muted)] group-hover:text-[var(--color-text-primary)]">
           {title}
         </span>
-        {count !== undefined && <span className="text-[10px] text-[var(--color-text-muted)] ml-auto">{count}</span>}
+        {count !== undefined ? (
+          <span className="text-[10px] text-[var(--color-text-muted)] ml-auto">{count}</span>
+        ) : null}
       </button>
       {isOpen && children}
     </div>
@@ -41,10 +48,13 @@ function CollapsibleSection({ title, count, defaultOpen = true, children }: Coll
 
 export function ProfilePanel() {
   const { client } = useDuckDB()
-  const activeNode = usePipelineStore(selectActiveNode)
-  const activeNodeId = usePipelineStore((s) => s.activeNodeId)
-  const { profileOpen, toggleProfile, profilePanelWidth, setProfilePanelWidth, setCanvasMode, openChartPanel } =
-    usePanelStore()
+  const { activeNode, activeNodeId } = usePipeline()
+  const profileOpen = usePanelStore((s) => s.profileOpen)
+  const toggleProfile = usePanelStore((s) => s.toggleProfile)
+  const profilePanelWidth = usePanelStore((s) => s.profilePanelWidth)
+  const setProfilePanelWidth = usePanelStore((s) => s.setProfilePanelWidth)
+  const setCanvasMode = usePanelStore((s) => s.setCanvasMode)
+  const openChartPanel = usePanelStore((s) => s.openChartPanel)
   const structureStyle = useThemeStore((s) => s.structureStyle)
   const isClassic = structureStyle === 'classic'
   const [stats, setStats] = useState<ColumnStats[]>([])
@@ -62,7 +72,7 @@ export function ProfilePanel() {
 
   // Refresh stats when activeNode changes (use activeNodeId to detect changes reliably)
   useEffect(() => {
-    if (!client || !activeNode || !profileOpen) return
+    if (!client || !activeNode || !activeNode.tableName || !activeNode.columns || !profileOpen) return
 
     setLoading(true)
     Promise.all([

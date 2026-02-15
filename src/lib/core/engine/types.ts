@@ -1,4 +1,13 @@
-import type { Dataset, DataView, PipelineEdge, PipelineNode } from '@/types/pipeline'
+import type {
+  ChartNode,
+  DashboardNode,
+  Dataset,
+  DataView,
+  ExportNode,
+  PipelineEdge,
+  PipelineNode,
+  PythonNode,
+} from '@/types/pipeline'
 
 /**
  * Snapshot for undo/redo
@@ -50,10 +59,16 @@ export interface CommandResult {
  * Command types for the pipeline engine
  */
 export type PipelineCommand =
-  | { type: 'addDataset'; dataset: Dataset }
-  | { type: 'addView'; view: DataView; parentId: string }
-  | { type: 'removeNode'; nodeId: string; cascade?: boolean }
-  | { type: 'updateNode'; nodeId: string; updates: Partial<PipelineNode> }
+  | { type: 'addDataset'; dataset: Dataset; suppressEffects?: boolean }
+  | { type: 'addView'; view: DataView; parentIds: string[]; suppressEffects?: boolean }
+  | { type: 'addChartNode'; chart: ChartNode; parentId: string }
+  | { type: 'addExportNode'; exportNode: ExportNode; parentId: string }
+  | { type: 'addDashboardNode'; dashboard: DashboardNode; parentIds: string[]; suppressEffects?: boolean }
+  | { type: 'addPythonNode'; pythonNode: PythonNode; parentId: string }
+  | { type: 'removeNode'; nodeId: string; cascade?: boolean; suppressEffects?: boolean }
+  | { type: 'updateNode'; nodeId: string; updates: Partial<PipelineNode>; suppressEffects?: boolean }
+  | { type: 'updateNodes'; updates: Record<string, Partial<PipelineNode>>; suppressEffects?: boolean }
+  | { type: 'setNodeParents'; nodeId: string; parentIds: string[]; suppressEffects?: boolean }
   | { type: 'setActiveNode'; nodeId: string | null }
   | { type: 'selectNode'; nodeId: string | null }
   | { type: 'openTab'; nodeId: string }

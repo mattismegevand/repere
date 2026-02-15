@@ -1,4 +1,7 @@
-import { ArrowRight, Circle, Clock, Sparkles } from 'lucide-react'
+import ArrowRight from 'lucide-react/dist/esm/icons/arrow-right'
+import Circle from 'lucide-react/dist/esm/icons/circle'
+import Clock from 'lucide-react/dist/esm/icons/clock'
+import Sparkles from 'lucide-react/dist/esm/icons/sparkles'
 import { useInView } from '@/hooks'
 
 const ROADMAP_ITEMS = [

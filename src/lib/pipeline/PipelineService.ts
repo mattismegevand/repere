@@ -9,25 +9,23 @@ import {
   getViewRowCount,
   getViewSchema,
   updateView as updateDuckDBView,
+  type ViewCreationResult,
+  type ViewSource,
+  type ViewUpdateResult,
 } from '@/lib/duckdb/view-manager'
 import { computeFileHash, getFileExtension } from '@/lib/file-system'
 import { getTopologicalOrder } from '@/lib/graph'
-import { isTauri } from '@/lib/platform'
-import type { Column, Dataset, DataView, PipelineNode, ViewOperation } from '@/types'
+import { isNativeRuntime } from '@/lib/runtime'
+import type { Dataset, DataView, PipelineNode, ViewOperation } from '@/types'
+import type { NodeRuntime, RuntimeColumn } from '@/types/pipelineRuntime'
 import type { SessionData } from './persistence'
 
 export interface CreateDatasetResult {
   id: string
   tableName: string
-  columns: Column[]
+  columns: RuntimeColumn[]
   rowCount: number | null // null = computing in background
   fileHash: string | undefined // undefined = computing in background
-}
-
-export interface ViewUpdateResult {
-  columns: Column[]
-  rowCount: number | null
-  viewSql: string
 }
 
 /**
@@ -90,7 +88,7 @@ export class PipelineService {
   }
 
   async createDatasetFromPath(filePath: string, fileName: string): Promise<CreateDatasetResult> {
-    if (!isTauri()) {
+    if (!isNativeRuntime()) {
       throw new Error('createDatasetFromPath is only available in Tauri mode')
     }
 
@@ -134,7 +132,7 @@ export class PipelineService {
       await this.client.execute(`CREATE TABLE "${tableName}" AS SELECT * FROM read_parquet('${file.name}')`)
     } else if (ext === 'xlsx') {
       // XLSX via File objects only works in browser (spatial extension)
-      if (isTauri()) {
+      if (isNativeRuntime()) {
         throw new Error('XLSX files must be loaded via file path in desktop mode')
       }
       await this.client.execute('INSTALL spatial; LOAD spatial;')
@@ -155,26 +153,21 @@ export class PipelineService {
   // ============================================
 
   async createView(
-    parentNode: PipelineNode,
+    parent: ViewSource,
     operation: ViewOperation,
-    additionalSources?: Record<string, { node: PipelineNode }>,
-    position?: { x: number; y: number }
-  ): Promise<DataView> {
-    return createDuckDBView(this.client, parentNode, operation, additionalSources, position)
+    additionalSources?: Record<string, ViewSource>
+  ): Promise<ViewCreationResult> {
+    return createDuckDBView(this.client, parent, operation, additionalSources)
   }
 
   async updateView(
     existingView: DataView,
+    existingRuntime: NodeRuntime,
     newOperation: ViewOperation,
-    parentNode: PipelineNode,
-    additionalSources?: Record<string, { node: PipelineNode }>
+    parent: ViewSource,
+    additionalSources?: Record<string, ViewSource>
   ): Promise<ViewUpdateResult> {
-    const updated = await updateDuckDBView(this.client, existingView, newOperation, parentNode, additionalSources)
-    return {
-      columns: updated.columns,
-      rowCount: updated.rowCount,
-      viewSql: updated.viewSql,
-    }
+    return updateDuckDBView(this.client, existingView, newOperation, existingRuntime, parent, additionalSources)
   }
 
   async dropView(viewName: string): Promise<void> {
@@ -185,7 +178,7 @@ export class PipelineService {
     await dropViews(this.client, viewNames)
   }
 
-  async getViewSchema(viewName: string): Promise<Column[]> {
+  async getViewSchema(viewName: string): Promise<RuntimeColumn[]> {
     return getViewSchema(this.client, viewName)
   }
 
@@ -257,7 +250,7 @@ export class PipelineService {
             )
           } else if (ext === 'xlsx') {
             // XLSX via File objects only works in browser (spatial extension)
-            if (isTauri()) {
+            if (isNativeRuntime()) {
               throw new Error('XLSX files must be loaded via file path in desktop mode')
             }
             await this.client.execute('INSTALL spatial; LOAD spatial;')
@@ -325,7 +318,7 @@ export class PipelineService {
   // SCHEMA EXTRACTION
   // ============================================
 
-  async extractFileSchema(file: File): Promise<Column[]> {
+  async extractFileSchema(file: File): Promise<RuntimeColumn[]> {
     const ext = file.name.split('.').pop()?.toLowerCase()
     const tempTableName = `_schema_temp_${Date.now()}`
 
@@ -348,7 +341,7 @@ export class PipelineService {
       )
     } else if (ext === 'xlsx') {
       // XLSX via File objects only works in browser (spatial extension)
-      if (isTauri()) {
+      if (isNativeRuntime()) {
         throw new Error('XLSX files must be loaded via file path in desktop mode')
       }
       await this.client.execute('INSTALL spatial; LOAD spatial;')

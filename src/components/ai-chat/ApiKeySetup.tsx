@@ -1,5 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Check, ChevronDown, ExternalLink, Eye, EyeOff } from 'lucide-react'
+import Check from 'lucide-react/dist/esm/icons/check'
+import ChevronDown from 'lucide-react/dist/esm/icons/chevron-down'
+import ExternalLink from 'lucide-react/dist/esm/icons/external-link'
+import Eye from 'lucide-react/dist/esm/icons/eye'
+import EyeOff from 'lucide-react/dist/esm/icons/eye-off'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/Button'
@@ -13,23 +17,19 @@ interface ApiKeySetupProps {
 }
 
 export function ApiKeySetup({ onClose }: ApiKeySetupProps) {
-  const { apiKey, model, setApiKey, setModel } = useChatStore()
+  const apiKey = useChatStore((s) => s.apiKey)
+  const model = useChatStore((s) => s.model)
+  const setApiKey = useChatStore((s) => s.setApiKey)
+  const setModel = useChatStore((s) => s.setModel)
   const [showKey, setShowKey] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
 
-  const { control, handleSubmit, watch } = useForm<ApiKeyFormValues>({
+  const { control, handleSubmit } = useForm<ApiKeyFormValues>({
     resolver: zodResolver(apiKeyFormSchema),
     defaultValues: {
-      model,
       apiKey: apiKey ?? '',
     },
   })
-
-  // Sync model changes immediately to store
-  const watchedModel = watch('model')
-  if (watchedModel !== model) {
-    setModel(watchedModel)
-  }
 
   const onSubmit = (data: ApiKeyFormValues) => {
     setApiKey(data.apiKey.trim() || null)
@@ -47,7 +47,7 @@ export function ApiKeySetup({ onClose }: ApiKeySetupProps) {
         <label className="block text-xs text-[var(--color-text-muted)] mb-1.5">Model</label>
         <div className="relative">
           <select
-            value={watchedModel}
+            value={model}
             onChange={(e) => setModel(e.target.value)}
             className="w-full px-3 py-1.5 text-xs rounded-lg border appearance-none cursor-pointer
               bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] border-[var(--color-border)]
@@ -68,7 +68,7 @@ export function ApiKeySetup({ onClose }: ApiKeySetupProps) {
         <div className="flex items-center justify-between mb-1.5">
           <label className="text-xs text-[var(--color-text-muted)]">OpenRouter API Key</label>
           <a
-            href="https://openrouter.ai/keys"
+            href="https://openrouter.ai/settings/keys"
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs text-[var(--color-accent)] hover:underline flex items-center gap-1"

@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui'
 import { RadixDialog } from '@/components/ui/RadixDialog'
-import { usePipelineStore } from '@/stores'
+import { usePipelineStore } from '@/stores/pipelineStore'
 
 interface Props {
   nodeIds: string[]
@@ -9,7 +9,9 @@ interface Props {
 }
 
 export function DeleteNodeDialog({ nodeIds, onDelete, onCancel }: Props) {
-  const { nodes, getNodeChildren, getNodeDescendants } = usePipelineStore()
+  const nodes = usePipelineStore((s) => s.nodes)
+  const getNodeChildren = usePipelineStore((s) => s.getNodeChildren)
+  const getNodeDescendants = usePipelineStore((s) => s.getNodeDescendants)
 
   if (nodeIds.length === 0) return null
 
@@ -112,7 +114,7 @@ export function DeleteNodeDialog({ nodeIds, onDelete, onCancel }: Props) {
               • {name}
             </div>
           ))}
-          {moreCount > 0 && <div className="text-[var(--color-text-muted)]">...and {moreCount} more</div>}
+          {moreCount > 0 ? <div className="text-[var(--color-text-muted)]">...and {moreCount} more</div> : null}
         </div>
 
         {allDescendants.size > 0 && (

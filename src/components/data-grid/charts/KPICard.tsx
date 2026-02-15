@@ -1,4 +1,6 @@
-import { ArrowDown, ArrowUp, Minus } from 'lucide-react'
+import ArrowDown from 'lucide-react/dist/esm/icons/arrow-down'
+import ArrowUp from 'lucide-react/dist/esm/icons/arrow-up'
+import Minus from 'lucide-react/dist/esm/icons/minus'
 import { useMemo } from 'react'
 import { useChartTheme } from '@/lib/charts'
 
@@ -120,9 +122,9 @@ export function KPICard({
             color: trend.direction === 'up' ? '#22c55e' : trend.direction === 'down' ? '#ef4444' : theme.text.secondary,
           }}
         >
-          {trend.direction === 'up' && <ArrowUp className="w-4 h-4" />}
-          {trend.direction === 'down' && <ArrowDown className="w-4 h-4" />}
-          {trend.direction === 'neutral' && <Minus className="w-4 h-4" />}
+          {trend.direction === 'up' ? <ArrowUp className="w-4 h-4" /> : null}
+          {trend.direction === 'down' ? <ArrowDown className="w-4 h-4" /> : null}
+          {trend.direction === 'neutral' ? <Minus className="w-4 h-4" /> : null}
           <span>{Math.abs(trend.change).toFixed(1)}%</span>
           <span style={{ color: theme.text.secondary }}>vs prev</span>
         </div>

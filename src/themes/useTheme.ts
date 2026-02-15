@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useThemeStore } from '@/stores'
+import { useThemeStore } from '@/stores/themeStore'
 import { applyTheme, getEffectiveColorScheme } from './index'
 
 /**
@@ -7,7 +7,9 @@ import { applyTheme, getEffectiveColorScheme } from './index'
  * Should be called once at the app root.
  */
 export function useTheme() {
-  const { theme, colorPalette, structureStyle } = useThemeStore()
+  const theme = useThemeStore((s) => s.theme)
+  const colorPalette = useThemeStore((s) => s.colorPalette)
+  const structureStyle = useThemeStore((s) => s.structureStyle)
 
   useEffect(() => {
     // Apply theme immediately

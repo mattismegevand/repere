@@ -1,4 +1,5 @@
 import { createContext, type ReactNode, useCallback, useContext, useMemo } from 'react'
+import { useGridColumnStore, useGridUIStore } from '@/components/data-grid/stores'
 import {
   bucketExpression,
   type DateAddUnit,
@@ -13,7 +14,8 @@ import {
 } from '@/lib/date-helpers'
 import { addFilterToExpression, createExpression } from '@/lib/filter-utils'
 import { usePipeline } from '@/lib/pipeline/usePipeline'
-import { useDialogStore, useGridColumnStore, useGridUIStore, useThemeStore } from '@/stores'
+import { useDialogStore } from '@/stores/dialogStore'
+import { useThemeStore } from '@/stores/themeStore'
 import type { FilterExpression, FilterOperation, SortOperation } from '@/types'
 import { formatCell } from '../formatters'
 import { useColumnsContext, useRowDataContext } from './DataContext'
@@ -106,7 +108,7 @@ export function GridActionsProvider({
     if (!contextMenu || !activeNode) return
     const rowData = getRow(contextMenu.row)
     if (!rowData) return
-    const values = activeNode.columns.map((col) => {
+    const values = visibleColumns.map((col) => {
       const val = rowData[col.name]
       if (val === null || val === undefined) return ''
       if (typeof val === 'string' && (val.includes(',') || val.includes('"') || val.includes('\n'))) {
@@ -116,7 +118,7 @@ export function GridActionsProvider({
     })
     await navigator.clipboard.writeText(values.join(','))
     closeAllMenus()
-  }, [activeNode, getRow, closeAllMenus])
+  }, [activeNode, visibleColumns, getRow, closeAllMenus])
 
   const copyRowJson = useCallback(async () => {
     const contextMenu = useGridUIStore.getState().contextMenu

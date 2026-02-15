@@ -31,8 +31,8 @@ export function HeatmapChart({
   const theme = useChartTheme()
 
   const option = useMemo(() => {
-    const xValues = [...new Set(data.map((d) => d.x))].sort()
-    const yValues = [...new Set(data.map((d) => d.y))].sort()
+    const xValues = [...[...new Set(data.map((d) => d.x))]].sort()
+    const yValues = [...[...new Set(data.map((d) => d.y))]].sort()
 
     const heatmapData = data.map((d) => [xValues.indexOf(d.x), yValues.indexOf(d.y), d.value])
 
@@ -92,8 +92,8 @@ export function HeatmapChart({
     }
   }, [data, xLabel, yLabel, valueLabel, height, theme])
 
-  const xValues = useMemo(() => [...new Set(data.map((d) => d.x))].sort(), [data])
-  const yValues = useMemo(() => [...new Set(data.map((d) => d.y))].sort(), [data])
+  const xValues = useMemo(() => [...[...new Set(data.map((d) => d.x))]].sort(), [data])
+  const yValues = useMemo(() => [...[...new Set(data.map((d) => d.y))]].sort(), [data])
 
   const handleClick = useCallback(
     (params: { value?: [number, number, number] }) => {

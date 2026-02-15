@@ -1,16 +1,14 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import {
-  BarChart2,
-  BoxSelect,
-  Download,
-  GitCompare,
-  Grid,
-  LineChart,
-  PieChart,
-  ScatterChart,
-  TreesIcon,
-  X,
-} from 'lucide-react'
+import BarChart2 from 'lucide-react/dist/esm/icons/bar-chart-2'
+import BoxSelect from 'lucide-react/dist/esm/icons/box-select'
+import Download from 'lucide-react/dist/esm/icons/download'
+import GitCompare from 'lucide-react/dist/esm/icons/git-compare'
+import Grid from 'lucide-react/dist/esm/icons/grid'
+import LineChart from 'lucide-react/dist/esm/icons/line-chart'
+import PieChart from 'lucide-react/dist/esm/icons/pie-chart'
+import ScatterChart from 'lucide-react/dist/esm/icons/scatter-chart'
+import TreesIcon from 'lucide-react/dist/esm/icons/trees-icon'
+import X from 'lucide-react/dist/esm/icons/x'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PreviewDataGrid } from '@/components/common/PreviewDataGrid'
 import {
@@ -29,9 +27,11 @@ import { Label, Select } from '@/components/ui'
 import { useDuckDB } from '@/lib/duckdb'
 import { escapeIdentifier } from '@/lib/duckdb/sql-builder'
 import { useChartData } from '@/lib/duckdb/useChartData'
+import { useHydratedNodes } from '@/lib/pipeline/hooks/useHydratedNodes'
 import { type CorrelationMatrix as CorrelationData, computeCorrelationMatrix } from '@/lib/profiling/correlation'
-import { useDialogStore, usePipelineStore } from '@/stores'
-import type { ChartAggregation, ChartConfig, ChartNode as ChartNodeType, ChartType, Column } from '@/types'
+import { useDialogStore } from '@/stores/dialogStore'
+import { usePipelineStore } from '@/stores/pipelineStore'
+import type { ChartAggregation, ChartConfig, ChartType, Column } from '@/types'
 
 type TabType = 'config' | 'data' | 'stats'
 
@@ -61,8 +61,10 @@ function isNumericType(type: Column['type']): boolean {
 }
 
 export function ChartModal() {
-  const { activeDialog, closeDialog } = useDialogStore()
-  const { nodes, updateChartNode } = usePipelineStore()
+  const activeDialog = useDialogStore((s) => s.activeDialog)
+  const closeDialog = useDialogStore((s) => s.closeDialog)
+  const nodes = useHydratedNodes()
+  const updateChartNode = usePipelineStore((s) => s.updateChartNode)
   const { client } = useDuckDB()
   const chartRef = useRef<HTMLDivElement>(null)
 
@@ -75,9 +77,9 @@ export function ChartModal() {
   // Chart configuration state
   const chartNode = chartModalNodeId ? nodes[chartModalNodeId] : null
   const isChartNode = chartNode?.type === 'chart'
-  const chartConfig = isChartNode ? (chartNode as ChartNodeType).config : null
+  const chartConfig = isChartNode ? chartNode.config : null
 
-  const parentId = isChartNode ? (chartNode as ChartNodeType).parentId : null
+  const parentId = isChartNode ? chartNode.parentId : null
   const parentNode = parentId ? nodes[parentId] : null
 
   const [chartType, setChartType] = useState<ChartType>('bar')
@@ -87,7 +89,7 @@ export function ChartModal() {
   const [colorColumn, setColorColumn] = useState<string>('')
   const [sizeColumn, setSizeColumn] = useState<string>('')
 
-  const columns = parentNode?.columns ?? []
+  const columns: Column[] = parentNode?.columns ?? []
   const numericColumns = columns.filter((c) => isNumericType(c.type))
 
   // Correlation matrix special handling
@@ -293,7 +295,9 @@ export function ChartModal() {
 
         const isNumeric = isNumericType(col.type)
         const escapedCol = escapeIdentifier(colName)
-        const escapedTable = escapeIdentifier(parentNode.tableName)
+        const parentTableName = parentNode.tableName
+        if (!parentTableName) return null
+        const escapedTable = escapeIdentifier(parentTableName)
 
         const sql = isNumeric
           ? `SELECT
@@ -428,8 +432,8 @@ export function ChartModal() {
 
           {/* Chart Area - fills available space */}
           <div className="flex-1 min-h-0 flex items-center justify-center p-4" ref={chartRef}>
-            {loading && <div className="text-[var(--color-text-muted)]">Loading chart data...</div>}
-            {error && <div className="text-red-500">{error}</div>}
+            {loading ? <div className="text-[var(--color-text-muted)]">Loading chart data...</div> : null}
+            {error ? <div className="text-red-500">{error}</div> : null}
             {!loading && !error && isCorrelation && correlationData && (
               <CorrelationMatrix data={correlationData} panelWidth={chartSize.width} />
             )}
@@ -459,7 +463,7 @@ export function ChartModal() {
               </button>
             ))}
             <div className="ml-auto text-xs text-[var(--color-text-muted)]">
-              {chartNode.rowCount !== null ? chartNode.rowCount.toLocaleString() : '...'} rows
+              {typeof chartNode.rowCount === 'number' ? chartNode.rowCount.toLocaleString() : '...'} rows
             </div>
           </div>
 
@@ -616,7 +620,9 @@ export function ChartModal() {
 
             {activeTab === 'stats' && (
               <div className="p-4">
-                {statsLoading && <div className="text-xs text-[var(--color-text-muted)]">Loading statistics...</div>}
+                {statsLoading ? (
+                  <div className="text-xs text-[var(--color-text-muted)]">Loading statistics...</div>
+                ) : null}
                 {!statsLoading && stats && (
                   <div className="grid grid-cols-2 gap-4">
                     {Object.entries(stats).map(([colName, colStats]) => (
@@ -632,9 +638,15 @@ export function ChartModal() {
                             label="Unique"
                             value={`${formatNumber(colStats.unique_count)} (${((Number(colStats.unique_count) / Number(colStats.count)) * 100).toFixed(1)}%)`}
                           />
-                          {colStats.min !== undefined && <StatRow label="Min" value={formatNumber(colStats.min)} />}
-                          {colStats.max !== undefined && <StatRow label="Max" value={formatNumber(colStats.max)} />}
-                          {colStats.mean !== undefined && <StatRow label="Mean" value={formatNumber(colStats.mean)} />}
+                          {colStats.min !== undefined ? (
+                            <StatRow label="Min" value={formatNumber(colStats.min)} />
+                          ) : null}
+                          {colStats.max !== undefined ? (
+                            <StatRow label="Max" value={formatNumber(colStats.max)} />
+                          ) : null}
+                          {colStats.mean !== undefined ? (
+                            <StatRow label="Mean" value={formatNumber(colStats.mean)} />
+                          ) : null}
                           {colStats.median !== undefined && (
                             <StatRow label="Median" value={formatNumber(colStats.median)} />
                           )}

@@ -9,7 +9,10 @@ import { downloadAllAsZip, exportData } from '@/lib/export/exporter'
 import { useCanvasToggle } from '@/lib/hooks/useCanvasToggle'
 import { usePipeline } from '@/lib/pipeline'
 import { clearDraft } from '@/lib/storage/idb'
-import { useDialogStore, usePanelStore, usePipelineStore, useThemeStore } from '@/stores'
+import { useDialogStore } from '@/stores/dialogStore'
+import { usePanelStore } from '@/stores/panelStore'
+import { usePipelineStore } from '@/stores/pipelineStore'
+import { useThemeStore } from '@/stores/themeStore'
 import { isTerminalNode } from '@/types'
 import { MenuDivider } from './MenuDivider'
 import { MenuDropdown } from './MenuDropdown'
@@ -26,9 +29,13 @@ export function MenuBar({ onOpenFile, onLoadSession }: MenuBarProps) {
   const { client } = useDuckDB()
   const { activeNode, exportSession, clearAllData } = usePipeline()
   const nodes = usePipelineStore((state) => state.nodes)
-  const { numberFormat, setNumberFormat } = useThemeStore()
-  const { toggleSqlPanel, toggleProfile, showHomepage, setShowHomepage } = usePanelStore()
-  const { openDialog } = useDialogStore()
+  const numberFormat = useThemeStore((s) => s.numberFormat)
+  const setNumberFormat = useThemeStore((s) => s.setNumberFormat)
+  const toggleSqlPanel = usePanelStore((s) => s.toggleSqlPanel)
+  const toggleProfile = usePanelStore((s) => s.toggleProfile)
+  const showHomepage = usePanelStore((s) => s.showHomepage)
+  const setShowHomepage = usePanelStore((s) => s.setShowHomepage)
+  const openDialog = useDialogStore((s) => s.openDialog)
   const { isCanvasMode, toggleCanvasMode } = useCanvasToggle()
 
   const [showAbout, setShowAbout] = useState(false)
@@ -37,7 +44,7 @@ export function MenuBar({ onOpenFile, onLoadSession }: MenuBarProps) {
   const hasData = activeNode !== null
 
   const handleExport = async (format: 'csv' | 'parquet' | 'json' | 'jsonl') => {
-    if (!client || !activeNode) return
+    if (!client || !activeNode?.tableName) return
     try {
       await exportData({
         client,

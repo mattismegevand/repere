@@ -1,15 +1,14 @@
-import {
-  BarChart2,
-  BoxSelect,
-  LineChart as LineChartIcon,
-  PieChart as PieChartIcon,
-  Plus,
-  ScatterChart,
-} from 'lucide-react'
+import BarChart2 from 'lucide-react/dist/esm/icons/bar-chart-2'
+import BoxSelect from 'lucide-react/dist/esm/icons/box-select'
+import LineChartIcon from 'lucide-react/dist/esm/icons/line-chart'
+import PieChartIcon from 'lucide-react/dist/esm/icons/pie-chart'
+import Plus from 'lucide-react/dist/esm/icons/plus'
+import ScatterChart from 'lucide-react/dist/esm/icons/scatter-chart'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { DuckDBClient } from '@/lib/duckdb/interface'
 import { formatDuckDBDate } from '@/lib/formatters'
-import { usePanelStore, usePipelineStore } from '@/stores'
+import { usePanelStore } from '@/stores/panelStore'
+import { usePipelineStore } from '@/stores/pipelineStore'
 import type { Column, ChartType as PipelineChartType } from '@/types'
 import type { ChartType, HistogramBin } from './charts'
 import { BarChart, BoxPlot, calculateUniqueRatio, determineChartType, LineChart, PieChart } from './charts'

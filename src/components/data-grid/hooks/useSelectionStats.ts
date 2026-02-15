@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
+import type { SelectionBounds } from '@/components/data-grid/stores'
 import type { DuckDBClient } from '@/lib/duckdb/interface'
-import type { SelectionBounds } from '@/stores'
 import type { Column } from '@/types'
 
 export interface SelectionStats {

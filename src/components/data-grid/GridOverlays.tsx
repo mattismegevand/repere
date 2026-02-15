@@ -45,7 +45,9 @@ export function GridOverlays({ selectionStats }: GridOverlaysProps) {
     <div className="absolute bottom-0 right-4 bg-[var(--color-bg-primary)] border-l border-t border-[var(--color-border)] rounded-tl px-2 py-1 text-[10px] z-30">
       <div className="flex items-center gap-2">
         {isSingleCell ? (
-          selectionStats.min !== null && <StatValue label="Value" value={selectionStats.min} />
+          selectionStats.min !== null ? (
+            <StatValue label="Value" value={selectionStats.min} />
+          ) : null
         ) : (
           <>
             <StatValue label="Count" value={selectionStats.count} />
@@ -58,9 +60,9 @@ export function GridOverlays({ selectionStats }: GridOverlaysProps) {
                 value={selectionStats.sum.toLocaleString(undefined, { maximumFractionDigits: 2 })}
               />
             )}
-            {selectionStats.avg !== null && <StatValue label="Avg" value={selectionStats.avg.toFixed(2)} />}
-            {selectionStats.min !== null && <StatValue label="Min" value={selectionStats.min} />}
-            {selectionStats.max !== null && <StatValue label="Max" value={selectionStats.max} />}
+            {selectionStats.avg !== null ? <StatValue label="Avg" value={selectionStats.avg.toFixed(2)} /> : null}
+            {selectionStats.min !== null ? <StatValue label="Min" value={selectionStats.min} /> : null}
+            {selectionStats.max !== null ? <StatValue label="Max" value={selectionStats.max} /> : null}
           </>
         )}
       </div>

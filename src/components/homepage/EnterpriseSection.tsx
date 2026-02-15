@@ -1,4 +1,5 @@
-import { ArrowRight, Building2 } from 'lucide-react'
+import ArrowRight from 'lucide-react/dist/esm/icons/arrow-right'
+import Building2 from 'lucide-react/dist/esm/icons/building-2'
 import { useInView } from '@/hooks'
 
 export function EnterpriseSection() {

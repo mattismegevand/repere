@@ -1,4 +1,4 @@
-import { isTauri } from '@/lib/platform'
+import { getRuntime, isNativeRuntime } from '@/lib/runtime'
 import type { DuckDBClient } from './interface'
 
 let clientInstance: DuckDBClient | null = null
@@ -14,13 +14,7 @@ export async function getDuckDBClient(): Promise<DuckDBClient> {
   if (initPromise) return initPromise
 
   initPromise = (async () => {
-    if (isTauri()) {
-      const { TauriDuckDBClient } = await import('./tauri-client')
-      clientInstance = new TauriDuckDBClient()
-    } else {
-      const { WasmDuckDBClient } = await import('./wasm-client')
-      clientInstance = await WasmDuckDBClient.create()
-    }
+    clientInstance = await getRuntime().createDuckDBClient()
     return clientInstance
   })()
 
@@ -31,7 +25,7 @@ export async function getDuckDBClient(): Promise<DuckDBClient> {
  * Check if the DuckDB client is currently using the native Tauri backend.
  */
 export function isNativeBackend(): boolean {
-  return isTauri()
+  return isNativeRuntime()
 }
 
 /**

@@ -1,6 +1,8 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { Monitor, Moon, Sun } from 'lucide-react'
-import { useThemeStore } from '@/stores'
+import Monitor from 'lucide-react/dist/esm/icons/monitor'
+import Moon from 'lucide-react/dist/esm/icons/moon'
+import Sun from 'lucide-react/dist/esm/icons/sun'
+import { useThemeStore } from '@/stores/themeStore'
 import type { ColorScheme } from '@/themes'
 import { colorPalettes, getColorPaletteList, getEffectiveColorScheme, getStructureStyleList } from '@/themes'
 
@@ -65,7 +67,8 @@ function ThemeMiniPreview({ paletteId, isSelected, onClick }: ThemeMiniPreviewPr
 }
 
 export function ThemeSubmenu() {
-  const { colorPalette, setColorPalette } = useThemeStore()
+  const colorPalette = useThemeStore((s) => s.colorPalette)
+  const setColorPalette = useThemeStore((s) => s.setColorPalette)
   const palettes = getColorPaletteList()
 
   return (
@@ -85,7 +88,8 @@ export function ThemeSubmenu() {
 }
 
 export function StyleSubmenu() {
-  const { structureStyle, setStructureStyle } = useThemeStore()
+  const structureStyle = useThemeStore((s) => s.structureStyle)
+  const setStructureStyle = useThemeStore((s) => s.setStructureStyle)
   const structures = getStructureStyleList()
 
   return (
@@ -139,7 +143,8 @@ function AppearanceButton({ scheme, currentScheme, onClick, icon, label }: Appea
 }
 
 export function AppearanceSubmenu() {
-  const { theme, setTheme } = useThemeStore()
+  const theme = useThemeStore((s) => s.theme)
+  const setTheme = useThemeStore((s) => s.setTheme)
 
   return (
     <DropdownMenu.Item

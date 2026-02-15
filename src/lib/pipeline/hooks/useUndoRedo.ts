@@ -1,7 +1,8 @@
 import { useCallback, useMemo } from 'react'
 import { useCacheManagerOptional } from '@/lib/cache'
 import { getTopologicalOrder } from '@/lib/graph'
-import { type PipelineSnapshot, usePipelineStore } from '@/stores/pipelineStore'
+import { usePipelineStore } from '@/stores/pipelineStore'
+import type { PipelineSnapshot } from '@/stores/pipelineTypes'
 import type { DataView } from '@/types'
 import { getRedoDescription, getUndoDescription } from '../history-descriptions'
 import { usePipelineServiceOptional } from '../PipelineProvider'
@@ -9,8 +10,15 @@ import { usePipelineServiceOptional } from '../PipelineProvider'
 export function useUndoRedo() {
   const service = usePipelineServiceOptional()
   const cacheManager = useCacheManagerOptional()
-  const { nodes, undoStack, redoStack, captureSnapshot, popUndo, pushUndo, popRedo, pushRedo, restoreSnapshot } =
-    usePipelineStore()
+  const nodes = usePipelineStore((s) => s.nodes)
+  const undoStack = usePipelineStore((s) => s.undoStack)
+  const redoStack = usePipelineStore((s) => s.redoStack)
+  const captureSnapshot = usePipelineStore((s) => s.captureSnapshot)
+  const popUndo = usePipelineStore((s) => s.popUndo)
+  const pushUndo = usePipelineStore((s) => s.pushUndo)
+  const popRedo = usePipelineStore((s) => s.popRedo)
+  const pushRedo = usePipelineStore((s) => s.pushRedo)
+  const restoreSnapshot = usePipelineStore((s) => s.restoreSnapshot)
 
   const canUndo = undoStack.length > 0
   const canRedo = redoStack.length > 0

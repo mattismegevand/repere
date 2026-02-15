@@ -3,8 +3,8 @@ import { resetGlobalCacheManager } from '@/lib/cache'
 import { useDuckDB } from '@/lib/duckdb'
 import { pickFiles } from '@/lib/file-system'
 import { usePipeline } from '@/lib/pipeline'
-import { usePanelStore } from '@/stores'
 import { useChatStore } from '@/stores/chatStore'
+import { usePanelStore } from '@/stores/panelStore'
 import { CTASection } from './CTASection'
 import { DataFlowAnimation } from './DataFlowAnimation'
 import { EnterpriseSection } from './EnterpriseSection'
@@ -29,7 +29,9 @@ export function Homepage({ isDragOver = false }: HomepageProps) {
   const { loading: dbLoading } = useDuckDB()
   const { loadDatasetFromPicked, loadSession, setError, forceSave, getDatasets, setActiveNode, clearAllData } =
     usePipeline()
-  const { startTour, setCanvasMode, setShowHomepage } = usePanelStore()
+  const startTour = usePanelStore((s) => s.startTour)
+  const setCanvasMode = usePanelStore((s) => s.setCanvasMode)
+  const setShowHomepage = usePanelStore((s) => s.setShowHomepage)
   const resetChat = useChatStore((s) => s.reset)
   const containerRef = useRef<HTMLDivElement>(null)
 

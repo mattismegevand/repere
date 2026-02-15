@@ -1,9 +1,15 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { Filter, Hash, ListOrdered, Scissors, SquareCode, Table2, Trash2 } from 'lucide-react'
+import Filter from 'lucide-react/dist/esm/icons/filter'
+import Hash from 'lucide-react/dist/esm/icons/hash'
+import ListOrdered from 'lucide-react/dist/esm/icons/list-ordered'
+import Scissors from 'lucide-react/dist/esm/icons/scissors'
+import SquareCode from 'lucide-react/dist/esm/icons/square-code'
+import Table2 from 'lucide-react/dist/esm/icons/table-2'
+import Trash2 from 'lucide-react/dist/esm/icons/trash-2'
 import { useCallback } from 'react'
 import { usePipeline } from '@/lib/pipeline'
-import type { EdgeContextMenuState } from '@/stores'
-import { usePanelStore, usePipelineStore } from '@/stores'
+import { type EdgeContextMenuState, usePanelStore } from '@/stores/panelStore'
+import { usePipelineStore } from '@/stores/pipelineStore'
 
 interface EdgeContextMenuProps {
   menu: EdgeContextMenuState
@@ -22,9 +28,10 @@ const INSERT_OPTIONS = [
 const itemClass = 'menu-item w-full text-left'
 
 export function EdgeContextMenu({ menu, onClose }: EdgeContextMenuProps) {
-  const { nodes } = usePipelineStore()
+  const nodes = usePipelineStore((s) => s.nodes)
   const { insertNodeBetween, deleteEdge } = usePipeline()
-  const { openSqlPanelForNode, setFilterEditor } = usePanelStore()
+  const openSqlPanelForNode = usePanelStore((s) => s.openSqlPanelForNode)
+  const setFilterEditor = usePanelStore((s) => s.setFilterEditor)
 
   const sourceNode = nodes[menu.sourceId]
   const targetNode = nodes[menu.targetId]

@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { queryMetrics } from '@/lib/dev'
-import type { Column } from '@/types/dataset'
+import type { RuntimeColumn } from '@/types/pipelineRuntime'
 import type { ColumnInfo, DuckDBClient, LoadResult, QueryResult } from './interface'
 import { DuckDBError } from './interface'
 import { mapDuckDBType } from './type-mapper'
@@ -86,7 +86,7 @@ export class TauriDuckDBClient implements DuckDBClient {
     }
   }
 
-  async describe(tableName: string): Promise<Column[]> {
+  async describe(tableName: string): Promise<RuntimeColumn[]> {
     const columns = await invoke<ColumnInfo[]>('duckdb_describe', { tableName })
     return columns.map((c) => ({
       name: c.name,

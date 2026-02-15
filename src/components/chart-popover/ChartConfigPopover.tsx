@@ -1,23 +1,25 @@
-import {
-  BarChart2,
-  BoxSelect,
-  ChevronDown,
-  ChevronUp,
-  GitCompare,
-  Grid,
-  GripHorizontal,
-  LineChart,
-  PieChart,
-  ScatterChart,
-  TreesIcon,
-  X,
-} from 'lucide-react'
+import BarChart2 from 'lucide-react/dist/esm/icons/bar-chart-2'
+import BoxSelect from 'lucide-react/dist/esm/icons/box-select'
+import ChevronDown from 'lucide-react/dist/esm/icons/chevron-down'
+import ChevronUp from 'lucide-react/dist/esm/icons/chevron-up'
+import GitCompare from 'lucide-react/dist/esm/icons/git-compare'
+import Grid from 'lucide-react/dist/esm/icons/grid'
+import GripHorizontal from 'lucide-react/dist/esm/icons/grip-horizontal'
+import LineChart from 'lucide-react/dist/esm/icons/line-chart'
+import PieChart from 'lucide-react/dist/esm/icons/pie-chart'
+import ScatterChart from 'lucide-react/dist/esm/icons/scatter-chart'
+import TreesIcon from 'lucide-react/dist/esm/icons/trees-icon'
+import X from 'lucide-react/dist/esm/icons/x'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Label, Select } from '@/components/ui'
 import { useDuckDB } from '@/lib/duckdb'
+import { useHydratedNodes } from '@/lib/pipeline/hooks/useHydratedNodes'
+import type { HydratedNode } from '@/lib/pipeline/hydration'
 import { usePipeline } from '@/lib/pipeline/usePipeline'
-import { usePanelStore, usePipelineStore } from '@/stores'
-import type { ChartAggregation, ChartConfig, ChartNode, ChartType, Column } from '@/types'
+import { usePanelStore } from '@/stores/panelStore'
+import type { ChartAggregation, ChartConfig, ChartType, Column } from '@/types'
+
+type HydratedChart = Extract<HydratedNode, { type: 'chart' }>
 
 const CHART_TYPES: Array<{ type: ChartType; label: string; icon: typeof BarChart2 }> = [
   { type: 'bar', label: 'Bar', icon: BarChart2 },
@@ -43,7 +45,7 @@ export function ChartConfigPopover() {
   const { client } = useDuckDB()
   const closeChartPanel = usePanelStore((s) => s.closeChartPanel)
   const activeEditingPanel = usePanelStore((s) => s.activeEditingPanel)
-  const { nodes } = usePipelineStore()
+  const nodes = useHydratedNodes()
   const { createChart, updateChart, deleteNode } = usePipeline()
   const popoverRef = useRef<HTMLDivElement>(null)
 
@@ -79,7 +81,7 @@ export function ChartConfigPopover() {
   deleteNodeRef.current = deleteNode
 
   const sourceNode = chartPanelSourceId ? nodes[chartPanelSourceId] : null
-  const columns = sourceNode?.columns ?? []
+  const columns: Column[] = sourceNode?.columns ?? []
   const numericColumns = columns.filter((c) => isNumericType(c.type))
   const categoricalColumns = columns.filter((c) => !isNumericType(c.type))
 
@@ -88,7 +90,7 @@ export function ChartConfigPopover() {
     if (chartPanelEditingId) {
       const editNode = nodes[chartPanelEditingId]
       if (editNode?.type === 'chart') {
-        const chartNode = editNode as ChartNode
+        const chartNode: HydratedChart = editNode
         const config = chartNode.config
         setChartType(config.chartType)
         setXColumn(config.xAxis?.column ?? '')

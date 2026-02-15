@@ -21,7 +21,7 @@ export function OptionCard({ selected, onClick, title, description, children }: 
     >
       {children}
       <div className="font-medium text-sm">{title}</div>
-      {description && <div className="text-xs text-[var(--color-text-muted)] mt-1">{description}</div>}
+      {description ? <div className="text-xs text-[var(--color-text-muted)] mt-1">{description}</div> : null}
     </button>
   )
 }

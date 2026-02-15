@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
-import { X } from 'lucide-react'
+import X from 'lucide-react/dist/esm/icons/x'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import {

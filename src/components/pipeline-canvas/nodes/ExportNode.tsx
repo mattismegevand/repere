@@ -1,13 +1,22 @@
-import { Braces, Download, FileSpreadsheet, FileText, type LucideIcon, Package } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import Braces from 'lucide-react/dist/esm/icons/braces'
+import Download from 'lucide-react/dist/esm/icons/download'
+import FileSpreadsheet from 'lucide-react/dist/esm/icons/file-spreadsheet'
+import FileText from 'lucide-react/dist/esm/icons/file-text'
+import Package from 'lucide-react/dist/esm/icons/package'
 import { memo, useCallback, useState } from 'react'
 import { useDuckDB } from '@/lib/duckdb'
 import { exportData } from '@/lib/export/exporter'
-import { usePipelineStore } from '@/stores'
-import type { ExportConfig, ExportFormat, ExportNode as ExportNodeType } from '@/types'
+import { useHydratedNodes } from '@/lib/pipeline/hooks/useHydratedNodes'
+import type { HydratedNode } from '@/lib/pipeline/hydration'
+import { usePipelineStore } from '@/stores/pipelineStore'
+import type { ExportConfig, ExportFormat } from '@/types'
 import { NodeContent, NodeHeader, NodeShell } from './shared'
 
+type HydratedExport = Extract<HydratedNode, { type: 'export' }>
+
 interface ExportNodeData {
-  export: ExportNodeType
+  export: HydratedExport
   isActive: boolean
   isSelected: boolean
   isPending?: boolean
@@ -59,7 +68,8 @@ const FORMATS: ExportFormat[] = ['csv', 'json', 'jsonl', 'parquet', 'xlsx']
 export const ExportNode = memo(function ExportNode({ data }: { data: ExportNodeData }) {
   const { export: exportNode, isActive, isSelected } = data
   const { client } = useDuckDB()
-  const { nodes, updateExportNode } = usePipelineStore()
+  const nodes = useHydratedNodes()
+  const updateExportNode = usePipelineStore((s) => s.updateExportNode)
 
   const exportConfig = exportNode.config
   const format = exportConfig.format
@@ -108,7 +118,7 @@ export const ExportNode = memo(function ExportNode({ data }: { data: ExportNodeD
   )
 
   const handleDownload = useCallback(async () => {
-    if (!client || !parentNode) return
+    if (!client || !parentNode?.tableName) return
 
     try {
       await exportData({
@@ -122,7 +132,7 @@ export const ExportNode = memo(function ExportNode({ data }: { data: ExportNodeD
     }
   }, [client, parentNode, format, filename, defaultFilename])
 
-  const formatCount = (n: number | null) => (n === null ? '...' : n.toLocaleString())
+  const formatCount = (n: number | null | undefined) => (typeof n === 'number' ? n.toLocaleString() : '...')
 
   return (
     <NodeShell isActive={isActive} isSelected={isSelected} hasSourceHandle={false} hasTargetHandle={true}>

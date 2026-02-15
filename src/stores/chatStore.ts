@@ -3,6 +3,8 @@ import { persist } from 'zustand/middleware'
 import { DEFAULT_MODEL } from '@/lib/ai/llm-client'
 import type { AgentPlan, ChatMessage, PlannedStep, StepStatus } from '@/types/ai'
 
+export type ExecutionMode = 'plan-first' | 'auto-run'
+
 interface ChatState {
   // Panel state
   isOpen: boolean
@@ -18,6 +20,12 @@ interface ChatState {
   // API configuration (persisted)
   apiKey: string | null
   model: string
+
+  // Execution mode (persisted)
+  executionMode: ExecutionMode
+
+  // Debug mode (persisted)
+  debugMode: boolean
 
   // Execution state
   isExecuting: boolean
@@ -48,6 +56,10 @@ interface ChatActions {
   setApiKey: (key: string | null) => void
   setModel: (model: string) => void
 
+  // Execution mode
+  setExecutionMode: (mode: ExecutionMode) => void
+  setDebugMode: (enabled: boolean) => void
+
   // Execution
   setExecuting: (executing: boolean) => void
   setCurrentStepIndex: (index: number) => void
@@ -77,6 +89,8 @@ const initialState: ChatState = {
   editingStepId: null,
   apiKey: devApiKey,
   model: DEFAULT_MODEL,
+  executionMode: 'auto-run',
+  debugMode: false,
   isExecuting: false,
   currentStepIndex: -1,
 }
@@ -192,6 +206,9 @@ export const useChatStore = create<ChatState & ChatActions>()(
       setApiKey: (key) => set({ apiKey: key }),
       setModel: (model) => set({ model }),
 
+      setExecutionMode: (mode) => set({ executionMode: mode }),
+      setDebugMode: (enabled) => set({ debugMode: enabled }),
+
       setExecuting: (executing) => set({ isExecuting: executing }),
       setCurrentStepIndex: (index) => set({ currentStepIndex: index }),
       setLoading: (loading) => set({ isLoading: loading }),
@@ -206,6 +223,8 @@ export const useChatStore = create<ChatState & ChatActions>()(
       partialize: (state) => ({
         apiKey: state.apiKey,
         model: state.model,
+        executionMode: state.executionMode,
+        debugMode: state.debugMode,
         // Don't persist messages or plan state
       }),
       // In dev mode, prefer env vars over persisted state

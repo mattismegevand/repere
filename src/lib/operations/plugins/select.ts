@@ -1,4 +1,4 @@
-import { Columns } from 'lucide-react'
+import Columns from 'lucide-react/dist/esm/icons/columns'
 import { escapeIdentifier } from '@/lib/duckdb/sql-builder/utils'
 import type { ToolDefinition } from '@/types/ai'
 import type { Column } from '@/types/dataset'

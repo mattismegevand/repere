@@ -9,6 +9,31 @@ import type { DataView, PipelineNode } from '@/types/pipeline'
 const SAMPLE_SIZE = 50
 
 /**
+ * Context serialization tiers for different stages of agent execution
+ */
+export type ContextTier = 'full' | 'refresh' | 'minimal'
+
+export interface SerializeOptions {
+  tier: ContextTier
+  maxSampleRows?: number // full: 5, refresh: 3, minimal: 0
+  includeAllNodes?: boolean // full: true, others: false (only current + active)
+  compressStats?: boolean // full: false, others: true
+}
+
+const DEFAULT_OPTIONS: SerializeOptions = {
+  tier: 'full',
+  maxSampleRows: 5,
+  includeAllNodes: true,
+  compressStats: false,
+}
+
+const TIER_OPTIONS: Record<ContextTier, Partial<SerializeOptions>> = {
+  full: { maxSampleRows: 5, includeAllNodes: true, compressStats: false },
+  refresh: { maxSampleRows: 3, includeAllNodes: false, compressStats: true },
+  minimal: { maxSampleRows: 0, includeAllNodes: false, compressStats: true },
+}
+
+/**
  * Fetch a sample of rows from a table for the LLM to understand patterns
  */
 async function fetchDataSample(
@@ -172,7 +197,9 @@ export async function buildAgentContext(
 /**
  * Serialize context to a compact string for LLM prompt
  */
-export function serializeContextForPrompt(context: AgentContext): string {
+export function serializeContextForPrompt(context: AgentContext, options?: Partial<SerializeOptions>): string {
+  const tierOpts = options?.tier ? TIER_OPTIONS[options.tier] : {}
+  const opts = { ...DEFAULT_OPTIONS, ...tierOpts, ...options }
   const lines: string[] = []
 
   // Current table info
@@ -185,7 +212,7 @@ export function serializeContextForPrompt(context: AgentContext): string {
   for (const col of context.currentNode.columns) {
     const stat = context.columnStats.find((s) => s.column === col.name)
     let colInfo = `- ${col.name} (${col.type}${col.nullable ? ', nullable' : ''})`
-    if (stat) {
+    if (stat && !opts.compressStats) {
       const parts: string[] = []
       if (stat.nullCount > 0) parts.push(`${stat.nullPercent}% null`)
       if (stat.uniqueCount) parts.push(`${stat.uniqueCount} unique`)
@@ -197,17 +224,18 @@ export function serializeContextForPrompt(context: AgentContext): string {
   }
   lines.push('')
 
-  // Sample data (first 5 rows for brevity in prompt)
-  if (context.dataSample.length > 0) {
-    lines.push('### Sample Data (first 5 rows)')
+  // Sample data (configurable rows)
+  const sampleRows = opts.maxSampleRows ?? 5
+  if (context.dataSample.length > 0 && sampleRows > 0) {
+    lines.push(`### Sample Data (first ${sampleRows} rows)`)
     lines.push('```json')
-    lines.push(JSON.stringify(context.dataSample.slice(0, 5), null, 2))
+    lines.push(JSON.stringify(context.dataSample.slice(0, sampleRows), null, 2))
     lines.push('```')
     lines.push('')
   }
 
-  // Operation history
-  if (context.operationHistory.length > 0) {
+  // Operation history (skip in minimal tier)
+  if (context.operationHistory.length > 0 && opts.tier !== 'minimal') {
     lines.push('### How we got here')
     for (const op of context.operationHistory) {
       lines.push(`- ${op}`)
@@ -215,20 +243,37 @@ export function serializeContextForPrompt(context: AgentContext): string {
     lines.push('')
   }
 
-  // All nodes in the pipeline
+  // All nodes in the pipeline (configurable)
   if (context.allNodes.length > 0) {
-    lines.push('### All Nodes in Pipeline')
-    lines.push('You can target any of these nodes using their ID in the `targetNodeId` parameter.')
-    lines.push('')
-    for (const node of context.allNodes) {
-      const isCurrent = node.id === context.currentNode.id
-      const marker = isCurrent ? ' (CURRENT)' : ''
-      lines.push(`**${node.name}**${marker}`)
-      lines.push(`- ID: \`${node.id}\``)
-      lines.push(`- Type: ${node.type}`)
-      lines.push(`- Rows: ${node.rowCount?.toLocaleString() ?? 'unknown'}`)
-      lines.push(`- Columns: ${node.columns.map((c) => `${c.name} (${c.type})`).join(', ')}`)
+    // In refresh/minimal mode, only show other nodes (not current)
+    const nodesToShow = opts.includeAllNodes
+      ? context.allNodes
+      : context.allNodes.filter((n) => n.id !== context.currentNode.id)
+
+    if (nodesToShow.length > 0 || opts.includeAllNodes) {
+      lines.push('### All Nodes in Pipeline')
+      lines.push('You can target any of these nodes using their ID in the `targetNodeId` parameter.')
       lines.push('')
+
+      // In compact mode, just list them briefly
+      if (!opts.includeAllNodes && nodesToShow.length > 0) {
+        lines.push('Other available nodes:')
+        for (const node of nodesToShow) {
+          lines.push(`- ${node.name} (\`${node.id}\`): ${node.columns.map((c) => c.name).join(', ')}`)
+        }
+        lines.push('')
+      } else {
+        for (const node of context.allNodes) {
+          const isCurrent = node.id === context.currentNode.id
+          const marker = isCurrent ? ' (CURRENT)' : ''
+          lines.push(`**${node.name}**${marker}`)
+          lines.push(`- ID: \`${node.id}\``)
+          lines.push(`- Type: ${node.type}`)
+          lines.push(`- Rows: ${node.rowCount?.toLocaleString() ?? 'unknown'}`)
+          lines.push(`- Columns: ${node.columns.map((c) => `${c.name} (${c.type})`).join(', ')}`)
+          lines.push('')
+        }
+      }
     }
   }
 

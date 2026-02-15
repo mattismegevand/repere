@@ -4,12 +4,16 @@ import type { PivotRow } from '@/components/pivot-table/types'
 import { createExpression } from '@/lib/filter-utils'
 import { usePipeline } from '@/lib/pipeline'
 import { usePivotQuery } from '@/lib/pivot'
-import { usePanelStore, usePipelineStore, usePivotStore } from '@/stores'
+import { usePanelStore } from '@/stores/panelStore'
+import { usePipelineStore } from '@/stores/pipelineStore'
+import { usePivotStore } from '@/stores/pivotStore'
 import type { Filter } from '@/types/dataset'
 
 export function PivotPreview() {
   const { data, loading, error } = usePivotQuery()
-  const { rowFields, columnField, filters: pivotFilters } = usePivotStore()
+  const rowFields = usePivotStore((s) => s.rowFields)
+  const columnField = usePivotStore((s) => s.columnField)
+  const pivotFilters = usePivotStore((s) => s.filters)
   const activeEditingPanel = usePanelStore((s) => s.activeEditingPanel)
   const { applyOperation, openTab } = usePipeline()
 

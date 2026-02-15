@@ -1,4 +1,4 @@
-import { Table2 } from 'lucide-react'
+import Table2 from 'lucide-react/dist/esm/icons/table-2'
 import { escapeIdentifier } from '@/lib/duckdb/sql-builder/utils'
 import type { ToolDefinition } from '@/types/ai'
 import type { Column } from '@/types/dataset'

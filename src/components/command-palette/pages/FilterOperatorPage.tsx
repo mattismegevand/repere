@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import { addFilterToExpression, createExpression } from '@/lib/filter-utils'
 import { useFilterApply } from '@/lib/hooks/useFilterApply'
 import { usePipeline } from '@/lib/pipeline/usePipeline'
-import type { Column, DataView, FilterExpression, FilterOperation, FilterOperator } from '@/types'
+import type { Column, FilterExpression, FilterOperation, FilterOperator } from '@/types'
 import { useCommandPalette } from '../CommandPaletteContext'
 import { PageHeader } from '../components/PageHeader'
 
@@ -54,12 +54,12 @@ export function FilterOperatorPage() {
   // Get current filter expression from active node (if it's a filter view)
   const currentFilterExpression = useMemo((): FilterExpression | undefined => {
     if (!activeNode || activeNode.type !== 'view') return undefined
-    const view = activeNode as DataView
-    if (view.operation.type !== 'filter') return undefined
-    return (view.operation as FilterOperation).expression
+    if (activeNode.operation.type !== 'filter') return undefined
+    return (activeNode.operation as FilterOperation).expression
   }, [activeNode])
 
-  const column = activeNode?.columns.find((c) => c.name === pageColumn)
+  const activeColumns = activeNode?.columns ?? []
+  const column = activeColumns.find((c) => c.name === pageColumn)
   const columnType = column?.type ?? 'unknown'
   const availableOps = OPERATORS.filter((op) => op.types.includes(columnType))
 

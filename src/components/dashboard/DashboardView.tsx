@@ -10,20 +10,18 @@ import {
 import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import * as Dialog from '@radix-ui/react-dialog'
-import {
-  ArrowLeft,
-  ChevronRight,
-  Grid2X2,
-  Grid3X3,
-  GripVertical,
-  Home,
-  LayoutGrid,
-  Pencil,
-  Plus,
-  Settings,
-  Trash2,
-  X,
-} from 'lucide-react'
+import ArrowLeft from 'lucide-react/dist/esm/icons/arrow-left'
+import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right'
+import Grid2X2 from 'lucide-react/dist/esm/icons/grid-2-x-2'
+import Grid3X3 from 'lucide-react/dist/esm/icons/grid-3-x-3'
+import GripVertical from 'lucide-react/dist/esm/icons/grip-vertical'
+import Home from 'lucide-react/dist/esm/icons/home'
+import LayoutGrid from 'lucide-react/dist/esm/icons/layout-grid'
+import Pencil from 'lucide-react/dist/esm/icons/pencil'
+import Plus from 'lucide-react/dist/esm/icons/plus'
+import Settings from 'lucide-react/dist/esm/icons/settings'
+import Trash2 from 'lucide-react/dist/esm/icons/trash-2'
+import X from 'lucide-react/dist/esm/icons/x'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChartConfigForm } from '@/components/chart-modal/ChartConfigForm'
 import {
@@ -44,7 +42,10 @@ import {
 import { useDuckDB } from '@/lib/duckdb'
 import { useChartData } from '@/lib/duckdb/useChartData'
 import { generateTimestampId } from '@/lib/id'
-import { useDashboardStore, useDialogStore, usePipelineStore } from '@/stores'
+import { useDashboardStore } from '@/stores/dashboardStore'
+import { useDialogStore } from '@/stores/dialogStore'
+import { usePipelineStore } from '@/stores/pipelineStore'
+import { usePipelineUiStore } from '@/stores/pipelineUiStore'
 import type {
   ChartConfig,
   ChartType,
@@ -60,9 +61,14 @@ import type {
 const MIN_CHART_HEIGHT = 250
 
 export function DashboardView() {
-  const { activeDialog, closeDialog, openDialog } = useDialogStore()
-  const { nodes, dataVersion, updateNode } = usePipelineStore()
-  const { activeFilters, collapseDashboard } = useDashboardStore()
+  const activeDialog = useDialogStore((s) => s.activeDialog)
+  const closeDialog = useDialogStore((s) => s.closeDialog)
+  const openDialog = useDialogStore((s) => s.openDialog)
+  const nodes = usePipelineStore((s) => s.nodes)
+  const updateNode = usePipelineStore((s) => s.updateNode)
+  const dataVersion = usePipelineUiStore((s) => s.dataVersion)
+  const activeFilters = useDashboardStore((s) => s.activeFilters)
+  const collapseDashboard = useDashboardStore((s) => s.collapseDashboard)
 
   const [showAddChart, setShowAddChart] = useState(false)
   const [editingChart, setEditingChart] = useState<DashboardChartConfig | null>(null)
@@ -213,7 +219,7 @@ export function DashboardView() {
           )}
 
           {/* Active filters display */}
-          {dashboardFilters.length > 0 && <FilterBar dashboardId={dashboardNodeId!} filters={dashboardFilters} />}
+          {dashboardFilters.length > 0 ? <FilterBar dashboardId={dashboardNodeId!} filters={dashboardFilters} /> : null}
 
           {/* Chart grid */}
           <div className="flex-1 overflow-auto p-4">
@@ -278,8 +284,10 @@ interface GlobalFilterBarProps {
 
 function GlobalFilterBar({ dashboardId, globalFilters }: GlobalFilterBarProps) {
   const { client } = useDuckDB()
-  const { nodes } = usePipelineStore()
-  const { activeFilters, setFilter, removeFilter } = useDashboardStore()
+  const nodes = usePipelineStore((s) => s.nodes)
+  const activeFilters = useDashboardStore((s) => s.activeFilters)
+  const setFilter = useDashboardStore((s) => s.setFilter)
+  const removeFilter = useDashboardStore((s) => s.removeFilter)
 
   const dashboardFilters = activeFilters[dashboardId] || []
 
@@ -390,7 +398,8 @@ interface FilterBarProps {
 }
 
 function FilterBar({ dashboardId, filters }: FilterBarProps) {
-  const { removeFilter, clearAllDashboardFilters } = useDashboardStore()
+  const removeFilter = useDashboardStore((s) => s.removeFilter)
+  const clearAllDashboardFilters = useDashboardStore((s) => s.clearAllDashboardFilters)
 
   return (
     <div className="flex items-center gap-2 px-4 py-2 bg-[var(--color-bg-secondary)] border-b border-[var(--color-border)]">
@@ -531,8 +540,8 @@ function AddChartDialog({ sourceId, tableName, columns, onAdd, onClose }: AddCha
               Preview
             </label>
             <div className="flex-1 flex items-center justify-center bg-[var(--color-bg-secondary)] rounded-lg min-h-[300px]">
-              {loading && <div className="text-[var(--color-text-muted)] text-sm">Loading preview...</div>}
-              {error && <div className="text-red-500 text-sm">{error}</div>}
+              {loading ? <div className="text-[var(--color-text-muted)] text-sm">Loading preview...</div> : null}
+              {error ? <div className="text-red-500 text-sm">{error}</div> : null}
               {!loading && !error && data && (
                 <ChartRenderer
                   chartType={chartConfig.chartType}
@@ -640,8 +649,8 @@ function EditChartDialog({ chart, tableName, columns, onSave, onClose }: EditCha
               Preview
             </label>
             <div className="flex-1 flex items-center justify-center bg-[var(--color-bg-secondary)] rounded-lg min-h-[300px]">
-              {loading && <div className="text-[var(--color-text-muted)] text-sm">Loading preview...</div>}
-              {error && <div className="text-red-500 text-sm">{error}</div>}
+              {loading ? <div className="text-[var(--color-text-muted)] text-sm">Loading preview...</div> : null}
+              {error ? <div className="text-red-500 text-sm">{error}</div> : null}
               {!loading && !error && data && (
                 <ChartRenderer
                   chartType={chartConfig.chartType}
@@ -835,8 +844,13 @@ function DashboardChart({
   dragListeners,
 }: DashboardChartProps) {
   const { client } = useDuckDB()
-  const { nodes } = usePipelineStore()
-  const { activeFilters, drillStates, setFilter, initDrill, drillDown, drillToLevel } = useDashboardStore()
+  const nodes = usePipelineStore((s) => s.nodes)
+  const activeFilters = useDashboardStore((s) => s.activeFilters)
+  const drillStates = useDashboardStore((s) => s.drillStates)
+  const setFilter = useDashboardStore((s) => s.setFilter)
+  const initDrill = useDashboardStore((s) => s.initDrill)
+  const drillDown = useDashboardStore((s) => s.drillDown)
+  const drillToLevel = useDashboardStore((s) => s.drillToLevel)
   const containerRef = useRef<HTMLDivElement>(null)
   const [chartSize, setChartSize] = useState({ width: 400, height: MIN_CHART_HEIGHT })
 
@@ -1009,7 +1023,7 @@ function DashboardChart({
         {loading && (
           <div className="flex items-center justify-center h-full text-[var(--color-text-muted)]">Loading...</div>
         )}
-        {error && <div className="flex items-center justify-center h-full text-red-500 text-sm">{error}</div>}
+        {error ? <div className="flex items-center justify-center h-full text-red-500 text-sm">{error}</div> : null}
         {!loading && !error && data && (
           <ChartRenderer
             chartType={chartType}

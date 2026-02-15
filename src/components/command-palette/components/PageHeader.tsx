@@ -1,4 +1,4 @@
-import { ChevronLeft } from 'lucide-react'
+import ChevronLeft from 'lucide-react/dist/esm/icons/chevron-left'
 import { useCommandPalette } from '../CommandPaletteContext'
 
 interface PageHeaderProps {

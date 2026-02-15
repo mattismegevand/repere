@@ -1,7 +1,11 @@
 import { useCallback, useRef } from 'react'
 import { computeFileHash, type PickedFile } from '@/lib/file-system'
+import { usePipelineRuntimeStore } from '@/stores/pipelineRuntimeStore'
 import { usePipelineStore } from '@/stores/pipelineStore'
+import { usePipelineUiStore } from '@/stores/pipelineUiStore'
 import type { Dataset, DataView } from '@/types'
+import type { NodeLayout } from '@/types/pipelineLayout'
+import type { NodeRuntime } from '@/types/pipelineRuntime'
 import { usePipelineServiceOptional } from '../PipelineProvider'
 import type { CreateDatasetResult } from '../PipelineService'
 import { validateSchema } from '../persistence'
@@ -23,7 +27,7 @@ function spawnBackgroundMetadata(
   // Compute row count in background
   service.computeRowCount(tableName).then((rowCount) => {
     if (mountedRef.current) {
-      usePipelineStore.getState().updateNode(datasetId, { rowCount })
+      usePipelineRuntimeStore.getState().setNodeRuntime(datasetId, { rowCount })
     }
   })
 
@@ -39,7 +43,10 @@ function spawnBackgroundMetadata(
 
 export function useDatasets() {
   const service = usePipelineServiceOptional()
-  const { addDataset, getNode, getNodeDescendants, bumpDataVersion } = usePipelineStore()
+  const addDataset = usePipelineStore((s) => s.addDataset)
+  const getNode = usePipelineStore((s) => s.getNode)
+  const getNodeDescendants = usePipelineStore((s) => s.getNodeDescendants)
+  const bumpDataVersion = usePipelineUiStore((s) => s.bumpDataVersion)
   const mountedRef = useRef(true)
 
   /**
@@ -66,17 +73,20 @@ export function useDatasets() {
           fileName: file.name,
           fileSize: file.size,
           fileHash: result.fileHash,
-          rowCount: result.rowCount,
-          columns: result.columns,
-          tableName: result.tableName,
           createdAt: new Date(),
-          position,
         }
 
-        addDataset(dataset)
+        const runtime: NodeRuntime = {
+          tableName: result.tableName,
+          columns: result.columns,
+          rowCount: result.rowCount,
+        }
+        const layout: NodeLayout = { position }
+
+        addDataset(dataset, runtime, layout)
 
         // Spawn background tasks for row count and file hash
-        spawnBackgroundMetadata(service, dataset.id, dataset.tableName, file, mountedRef)
+        spawnBackgroundMetadata(service, dataset.id, result.tableName, file, mountedRef)
 
         return dataset
       } catch (err) {
@@ -127,17 +137,20 @@ export function useDatasets() {
           fileName,
           fileSize,
           fileHash: result.fileHash,
-          rowCount: result.rowCount,
-          columns: result.columns,
-          tableName: result.tableName,
           createdAt: new Date(),
-          position,
         }
 
-        addDataset(dataset)
+        const runtime: NodeRuntime = {
+          tableName: result.tableName,
+          columns: result.columns,
+          rowCount: result.rowCount,
+        }
+        const layout: NodeLayout = { position }
+
+        addDataset(dataset, runtime, layout)
 
         // Spawn background tasks for row count and file hash (file is only available for File-based loading)
-        spawnBackgroundMetadata(service, dataset.id, dataset.tableName, file, mountedRef)
+        spawnBackgroundMetadata(service, dataset.id, result.tableName, file, mountedRef)
 
         return dataset
       } catch (err) {
@@ -156,11 +169,15 @@ export function useDatasets() {
       if (!dataset || dataset.type !== 'dataset' || !dataset.isPlaceholder) {
         return { success: false, error: 'Invalid placeholder dataset' }
       }
+      const datasetRuntime = usePipelineRuntimeStore.getState().nodes[datasetId]
+      if (!datasetRuntime?.columns || !datasetRuntime.tableName) {
+        return { success: false, error: 'Missing dataset runtime metadata' }
+      }
 
       try {
         // Validate schema first
         const fileColumns = await service.extractFileSchema(file)
-        const validationResult = validateSchema(fileColumns, dataset.columns)
+        const validationResult = validateSchema(fileColumns, datasetRuntime.columns)
 
         if (!validationResult.valid) {
           const missingMsg =
@@ -180,7 +197,7 @@ export function useDatasets() {
         const fileHash = await computeFileHash(file)
         const isExactMatch = dataset.fileHash ? fileHash === dataset.fileHash : false
 
-        await service.fillPlaceholderTable(dataset.tableName, file)
+        await service.fillPlaceholderTable(datasetRuntime.tableName, file)
 
         // Update node with file info, mark as not placeholder, set rowCount to null (computing)
         usePipelineStore.getState().updateNode(datasetId, {
@@ -192,9 +209,9 @@ export function useDatasets() {
         } as Partial<Dataset>)
 
         // Spawn background row count computation for the dataset
-        service.computeRowCount(dataset.tableName).then((rowCount) => {
+        service.computeRowCount(datasetRuntime.tableName).then((rowCount) => {
           if (mountedRef.current) {
-            usePipelineStore.getState().updateNode(datasetId, { rowCount })
+            usePipelineRuntimeStore.getState().setNodeRuntime(datasetId, { rowCount })
           }
         })
 
@@ -206,14 +223,16 @@ export function useDatasets() {
 
         // Set all descendants to null (computing) immediately
         for (const { id } of viewDescendants) {
-          usePipelineStore.getState().updateNode(id, { rowCount: null })
+          usePipelineRuntimeStore.getState().setNodeRuntime(id, { rowCount: null })
         }
 
         // Compute row counts in background
-        for (const { id, node } of viewDescendants) {
-          service.getViewRowCount(node.tableName).then((viewRowCount) => {
+        for (const { id } of viewDescendants) {
+          const runtime = usePipelineRuntimeStore.getState().nodes[id]
+          if (!runtime?.tableName) continue
+          service.getViewRowCount(runtime.tableName).then((viewRowCount) => {
             if (mountedRef.current) {
-              usePipelineStore.getState().updateNode(id, { rowCount: viewRowCount })
+              usePipelineRuntimeStore.getState().setNodeRuntime(id, { rowCount: viewRowCount })
             }
           })
         }
@@ -234,11 +253,15 @@ export function useDatasets() {
       if (!dataset || dataset.type !== 'dataset') {
         return { success: false, error: 'Invalid dataset' }
       }
+      const datasetRuntime = usePipelineRuntimeStore.getState().nodes[datasetId]
+      if (!datasetRuntime?.columns || !datasetRuntime.tableName) {
+        return { success: false, error: 'Missing dataset runtime metadata' }
+      }
 
       try {
         // Validate schema first
         const fileColumns = await service.extractFileSchema(file)
-        const validationResult = validateSchema(fileColumns, dataset.columns)
+        const validationResult = validateSchema(fileColumns, datasetRuntime.columns)
 
         if (!validationResult.valid) {
           const missingMsg =
@@ -259,7 +282,7 @@ export function useDatasets() {
         const isExactMatch = dataset.fileHash ? fileHash === dataset.fileHash : false
 
         // Replace the table data
-        await service.fillPlaceholderTable(dataset.tableName, file)
+        await service.fillPlaceholderTable(datasetRuntime.tableName, file)
 
         // Update node with file info, set rowCount to null (computing)
         usePipelineStore.getState().updateNode(datasetId, {
@@ -270,9 +293,9 @@ export function useDatasets() {
         } as Partial<Dataset>)
 
         // Spawn background row count computation for the dataset
-        service.computeRowCount(dataset.tableName).then((rowCount) => {
+        service.computeRowCount(datasetRuntime.tableName).then((rowCount) => {
           if (mountedRef.current) {
-            usePipelineStore.getState().updateNode(datasetId, { rowCount })
+            usePipelineRuntimeStore.getState().setNodeRuntime(datasetId, { rowCount })
           }
         })
 
@@ -284,14 +307,16 @@ export function useDatasets() {
 
         // Set all descendants to null (computing) immediately
         for (const { id } of viewDescendants) {
-          usePipelineStore.getState().updateNode(id, { rowCount: null })
+          usePipelineRuntimeStore.getState().setNodeRuntime(id, { rowCount: null })
         }
 
         // Compute row counts in background
-        for (const { id, node } of viewDescendants) {
-          service.getViewRowCount(node.tableName).then((viewRowCount) => {
+        for (const { id } of viewDescendants) {
+          const runtime = usePipelineRuntimeStore.getState().nodes[id]
+          if (!runtime?.tableName) continue
+          service.getViewRowCount(runtime.tableName).then((viewRowCount) => {
             if (mountedRef.current) {
-              usePipelineStore.getState().updateNode(id, { rowCount: viewRowCount })
+              usePipelineRuntimeStore.getState().setNodeRuntime(id, { rowCount: viewRowCount })
             }
           })
         }

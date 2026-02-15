@@ -7,7 +7,7 @@
  */
 
 import type { DuckDBClient } from '@/lib/duckdb/interface'
-import { isTauri } from '@/lib/platform'
+import { isNativeRuntime } from '@/lib/runtime'
 import type { PythonExecutionResult, PythonExecutor, PythonServiceStatus } from './types'
 
 type StatusChangeCallback = (status: PythonServiceStatus, message?: string) => void
@@ -18,7 +18,7 @@ export class PythonService {
   private statusCallbacks: StatusChangeCallback[] = []
   private currentStatus: PythonServiceStatus = 'unavailable'
   private statusMessage: string | undefined
-  private isWeb: boolean = !isTauri()
+  private isWeb: boolean = !isNativeRuntime()
 
   async setDuckDBClient(client: DuckDBClient): Promise<void> {
     this.duckdbClient = client
@@ -57,7 +57,7 @@ export class PythonService {
     this.notifyStatusChange('loading', 'Initializing Python environment...')
 
     try {
-      if (isTauri()) {
+      if (isNativeRuntime()) {
         // Use Tauri native executor
         const { TauriExecutor } = await import('./tauri/TauriExecutor')
         this.executor = new TauriExecutor()

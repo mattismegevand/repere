@@ -1,12 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Braces, FileSpreadsheet, FileText, Package } from 'lucide-react'
+import Braces from 'lucide-react/dist/esm/icons/braces'
+import FileSpreadsheet from 'lucide-react/dist/esm/icons/file-spreadsheet'
+import FileText from 'lucide-react/dist/esm/icons/file-text'
+import Package from 'lucide-react/dist/esm/icons/package'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/Button'
 import { FormInput } from '@/components/ui/form'
 import { Label } from '@/components/ui/Label'
 import { RadixDialog } from '@/components/ui/RadixDialog'
+import { useHydratedNodes } from '@/lib/pipeline/hooks/useHydratedNodes'
 import { usePipeline } from '@/lib/pipeline/usePipeline'
-import { useDialogStore, usePipelineStore } from '@/stores'
+import { useDialogStore } from '@/stores/dialogStore'
 import type { ExportConfig, ExportFormat } from '@/types'
 import { type ExportFormValues, exportFormSchema } from './schema'
 
@@ -57,8 +61,9 @@ const FORMAT_OPTIONS: FormatOption[] = [
 ]
 
 export function ExportDialog() {
-  const { activeDialog, closeDialog } = useDialogStore()
-  const { nodes } = usePipelineStore()
+  const activeDialog = useDialogStore((s) => s.activeDialog)
+  const closeDialog = useDialogStore((s) => s.closeDialog)
+  const nodes = useHydratedNodes()
   const { createExport } = usePipeline()
 
   const exportDialogOpen = activeDialog?.type === 'export'
@@ -118,7 +123,7 @@ export function ExportDialog() {
           <div className="mt-1 px-3 py-2 bg-[var(--color-bg-secondary)] rounded text-sm">
             {sourceNode?.name}
             <span className="text-[var(--color-text-muted)] ml-2">
-              ({sourceNode?.rowCount !== null ? sourceNode?.rowCount.toLocaleString() : '...'} rows)
+              ({typeof sourceNode?.rowCount === 'number' ? sourceNode.rowCount.toLocaleString() : '...'} rows)
             </span>
           </div>
         </div>

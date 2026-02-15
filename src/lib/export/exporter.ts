@@ -4,7 +4,7 @@ import type { DuckDBClient } from '@/lib/duckdb/interface'
 import { buildSelectQuery } from '@/lib/duckdb/query-builder'
 import { saveFileTauri } from '@/lib/file-system/tauri-file-ops'
 import { normalizeRowDates } from '@/lib/formatters'
-import { isTauri } from '@/lib/platform'
+import { isNativeRuntime } from '@/lib/runtime'
 import type { ExportFormat, ExportNode, Filter, PipelineNode, Sort } from '@/types'
 
 interface ExportOptions {
@@ -185,7 +185,7 @@ async function downloadFile(
       : new Blob([content as BlobPart], { type: mimeType })
 
   // Use native save dialog in Tauri
-  if (isTauri()) {
+  if (isNativeRuntime()) {
     const ext = filename.split('.').pop() || ''
     const saved = await saveFileTauri(filename, blob, [{ name: `${ext.toUpperCase()} File`, extensions: [ext] }])
     if (saved) return
@@ -306,7 +306,7 @@ export async function downloadAllAsZip({ client, nodes, chartDataUrls }: Downloa
   const zipFilename = `repere_export_${new Date().toISOString().slice(0, 10)}.zip`
 
   // Use native save dialog in Tauri
-  if (isTauri()) {
+  if (isNativeRuntime()) {
     const saved = await saveFileTauri(zipFilename, content, [{ name: 'ZIP Archive', extensions: ['zip'] }])
     if (saved) return
   }

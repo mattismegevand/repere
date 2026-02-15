@@ -1,13 +1,19 @@
-import { Expand, LayoutDashboard, Settings } from 'lucide-react'
+import Expand from 'lucide-react/dist/esm/icons/expand'
+import LayoutDashboard from 'lucide-react/dist/esm/icons/layout-dashboard'
+import Settings from 'lucide-react/dist/esm/icons/settings'
 import { memo, useCallback } from 'react'
 import { useDuckDB } from '@/lib/duckdb'
-import { useDashboardStore, useDialogStore, usePipelineStore } from '@/stores'
-import type { DashboardNode as DashboardNodeType } from '@/types'
+import { useHydratedNodes } from '@/lib/pipeline/hooks/useHydratedNodes'
+import type { HydratedNode } from '@/lib/pipeline/hydration'
+import { useDashboardStore } from '@/stores/dashboardStore'
+import { useDialogStore } from '@/stores/dialogStore'
 import { MiniChartPreview } from './MiniChartPreview'
 import { NodeActionButton, NodeHeader, NodeShell } from './shared'
 
+type HydratedDashboard = Extract<HydratedNode, { type: 'dashboard' }>
+
 interface DashboardNodeData {
-  dashboard: DashboardNodeType
+  dashboard: HydratedDashboard
   isActive: boolean
   isSelected: boolean
   isPending?: boolean
@@ -16,9 +22,10 @@ interface DashboardNodeData {
 
 export const DashboardNode = memo(function DashboardNode({ data }: { data: DashboardNodeData }) {
   const { dashboard, isActive, isSelected, isPending } = data
-  const { nodes } = usePipelineStore()
-  const { activeFilters, expandDashboard } = useDashboardStore()
-  const { openDialog } = useDialogStore()
+  const nodes = useHydratedNodes()
+  const activeFilters = useDashboardStore((s) => s.activeFilters)
+  const expandDashboard = useDashboardStore((s) => s.expandDashboard)
+  const openDialog = useDialogStore((s) => s.openDialog)
   const { client } = useDuckDB()
 
   const config = dashboard.config
@@ -33,7 +40,7 @@ export const DashboardNode = memo(function DashboardNode({ data }: { data: Dashb
   const activeFilterCount = dashboardFilters.length
 
   // Get parent names for display
-  const parentNames = dashboard.parentIds
+  const parentNames = (dashboard.parentIds ?? [])
     .map((id) => nodes[id]?.name)
     .filter(Boolean)
     .slice(0, 2)
@@ -63,7 +70,7 @@ export const DashboardNode = memo(function DashboardNode({ data }: { data: Dashb
   // Build subtitle
   const subtitle =
     parentNames.length > 0
-      ? `Sources: ${parentNames.join(', ')}${dashboard.parentIds.length > 2 ? ` +${dashboard.parentIds.length - 2}` : ''}`
+      ? `Sources: ${parentNames.join(', ')}${(dashboard.parentIds?.length ?? 0) > 2 ? ` +${(dashboard.parentIds?.length ?? 0) - 2}` : ''}`
       : 'No sources'
 
   // Actions for the header

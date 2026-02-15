@@ -1,17 +1,15 @@
-import {
-  BarChart2,
-  BoxSelect,
-  Combine,
-  Gauge,
-  GitCompare,
-  GitPullRequestArrow,
-  Grid,
-  Hash,
-  LineChart,
-  PieChart,
-  ScatterChart,
-  TreesIcon,
-} from 'lucide-react'
+import BarChart2 from 'lucide-react/dist/esm/icons/bar-chart-2'
+import BoxSelect from 'lucide-react/dist/esm/icons/box-select'
+import Combine from 'lucide-react/dist/esm/icons/combine'
+import Gauge from 'lucide-react/dist/esm/icons/gauge'
+import GitCompare from 'lucide-react/dist/esm/icons/git-compare'
+import GitPullRequestArrow from 'lucide-react/dist/esm/icons/git-pull-request-arrow'
+import Grid from 'lucide-react/dist/esm/icons/grid'
+import Hash from 'lucide-react/dist/esm/icons/hash'
+import LineChart from 'lucide-react/dist/esm/icons/line-chart'
+import PieChart from 'lucide-react/dist/esm/icons/pie-chart'
+import ScatterChart from 'lucide-react/dist/esm/icons/scatter-chart'
+import TreesIcon from 'lucide-react/dist/esm/icons/trees-icon'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Label, Select } from '@/components/ui'
 import type { ChartAggregation, ChartConfig, ChartType, Column } from '@/types'

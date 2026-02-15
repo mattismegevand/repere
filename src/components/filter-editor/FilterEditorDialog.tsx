@@ -1,4 +1,6 @@
-import { Code, Plus, X } from 'lucide-react'
+import Code from 'lucide-react/dist/esm/icons/code'
+import Plus from 'lucide-react/dist/esm/icons/plus'
+import X from 'lucide-react/dist/esm/icons/x'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ResultGrid } from '@/components/sql-panel/ResultGrid'
 import { Button } from '@/components/ui'
@@ -12,7 +14,7 @@ import { formatDuckDBDate, formatDuckDBTimestampForInput, normalizeRowDates } fr
 import { useFilterApply } from '@/lib/hooks/useFilterApply'
 import { usePipeline } from '@/lib/pipeline/usePipeline'
 import { formatShortcut } from '@/lib/platform'
-import { useThemeStore } from '@/stores'
+import { useThemeStore } from '@/stores/themeStore'
 import type {
   Column,
   DataView,
@@ -638,7 +640,7 @@ export function FilterEditorDialog({ onClose }: Props) {
           <span className="text-[10px] font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
             Preview
           </span>
-          {preview.loading && <span className="text-[10px] text-[var(--color-text-muted)]">Loading...</span>}
+          {preview.loading ? <span className="text-[10px] text-[var(--color-text-muted)]">Loading...</span> : null}
           {!preview.loading && !preview.error && (
             <span className="text-[10px] text-[var(--color-text-muted)]">
               {preview.totalCount.toLocaleString()} row{preview.totalCount !== 1 ? 's' : ''}

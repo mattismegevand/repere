@@ -1,4 +1,6 @@
-import { ArrowDown, ArrowUp, Filter } from 'lucide-react'
+import ArrowDown from 'lucide-react/dist/esm/icons/arrow-down'
+import ArrowUp from 'lucide-react/dist/esm/icons/arrow-up'
+import Filter from 'lucide-react/dist/esm/icons/filter'
 
 interface Column {
   name: string

@@ -149,7 +149,7 @@ export const ColumnCard = memo(function ColumnCard({ stats, compact = false }: P
         </div>
       )}
 
-      {stats.histogram && stats.histogram.length > 0 && <LazyHistogram data={stats.histogram} height={80} />}
+      {stats.histogram && stats.histogram.length > 0 ? <LazyHistogram data={stats.histogram} height={80} /> : null}
     </div>
   )
 })

@@ -1,4 +1,4 @@
-import { isTauri } from '@/lib/platform'
+import { isNativeRuntime } from '@/lib/runtime'
 import { pickFilesTauri, readFileTauri } from './tauri-file-ops'
 
 const FILE_TYPES = [
@@ -40,7 +40,7 @@ export function isSessionFile(picked: PickedFile): boolean {
  */
 export async function pickFiles(multiple = false): Promise<PickedFile[]> {
   // Use Tauri native dialog when running in desktop app
-  if (isTauri()) {
+  if (isNativeRuntime()) {
     const selections = await pickFilesTauri(multiple)
     return selections.map((s) => ({ type: 'path', path: s.path, name: s.name }))
   }

@@ -1,4 +1,4 @@
-import { Hash } from 'lucide-react'
+import Hash from 'lucide-react/dist/esm/icons/hash'
 import { escapeIdentifier } from '@/lib/duckdb/sql-builder/utils'
 import type { ToolDefinition } from '@/types/ai'
 import type { LimitOperation } from '@/types/pipeline'

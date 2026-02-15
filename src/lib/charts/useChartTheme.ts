@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useThemeStore } from '@/stores'
+import { useThemeStore } from '@/stores/themeStore'
 import { colorPalettes, getEffectiveColorScheme, structureStyles } from '@/themes'
 import { getChartTheme } from './chartTheme'
 

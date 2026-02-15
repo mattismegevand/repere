@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { type EditingCell, useGridEditingStore } from '@/stores'
+import { type EditingCell, useGridEditingStore } from '@/components/data-grid/stores'
 import { formatValueForEdit, parseEditValue, validateEditValue } from '../utils/cell-editing'
 import { useColumnsContext, useRowDataContext } from './DataContext'
 

@@ -1,7 +1,13 @@
 import { useCallback, useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import { useHydratedNodes } from '@/lib/pipeline/hooks/useHydratedNodes'
+import { usePipelineLayoutStore } from '@/stores/pipelineLayoutStore'
+import { usePipelineRuntimeStore } from '@/stores/pipelineRuntimeStore'
 import { getChildren, getParents, usePipelineStore } from '@/stores/pipelineStore'
+import { usePipelineUiStore } from '@/stores/pipelineUiStore'
 import type { DataView } from '@/types'
 import { useDatasets } from './hooks/useDatasets'
+import { useEngineDispatcher } from './hooks/useEngineDispatcher'
 import { useSession } from './hooks/useSession'
 import { useUndoRedo } from './hooks/useUndoRedo'
 import { useViewOperations } from './hooks/useViewOperations'
@@ -13,18 +19,68 @@ import { usePipelineServiceOptional } from './PipelineProvider'
  */
 export function usePipeline() {
   const service = usePipelineServiceOptional()
-  const store = usePipelineStore()
-  const { loading, error, successMessage, setLoading, setError, setSuccessMessage } = usePipelineStore()
+  const store = usePipelineStore(
+    useShallow((s) => ({
+      nodes: s.nodes,
+      edges: s.edges,
+      activeNodeId: s.activeNodeId,
+      selectedNodeId: s.selectedNodeId,
+      openNodeIds: s.openNodeIds,
+      addView: s.addView,
+      setActiveNode: s.setActiveNode,
+      selectNode: s.selectNode,
+      openTab: s.openTab,
+      closeTab: s.closeTab,
+      replaceActiveTab: s.replaceActiveTab,
+      updateNodePosition: s.updateNodePosition,
+      updateNodeName: s.updateNodeName,
+      getNode: s.getNode,
+      getNodeChildren: s.getNodeChildren,
+      getNodeParents: s.getNodeParents,
+      getNodeDescendants: s.getNodeDescendants,
+      getAllRootNodes: s.getAllRootNodes,
+      getDatasets: s.getDatasets,
+      getViews: s.getViews,
+      reset: s.reset,
+    }))
+  )
+  const hydratedNodes = useHydratedNodes()
+  const {
+    loading,
+    error,
+    successMessage,
+    setLoading,
+    setError,
+    setSuccessMessage,
+    pendingSession,
+    restorationState,
+    skipDataset,
+    unskipDataset,
+  } = usePipelineUiStore(
+    useShallow((s) => ({
+      loading: s.loading,
+      error: s.error,
+      successMessage: s.successMessage,
+      setLoading: s.setLoading,
+      setError: s.setError,
+      setSuccessMessage: s.setSuccessMessage,
+      pendingSession: s.pendingSession,
+      restorationState: s.restorationState,
+      skipDataset: s.skipDataset,
+      unskipDataset: s.unskipDataset,
+    }))
+  )
 
   // Compose focused hooks
   const datasets = useDatasets()
   const views = useViewOperations()
   const history = useUndoRedo()
   const session = useSession()
+  const { dispatch } = useEngineDispatcher()
 
   // Get active node
-  const activeNode = store.activeNodeId ? store.nodes[store.activeNodeId] : null
-  const selectedNode = store.selectedNodeId ? store.nodes[store.selectedNodeId] : null
+  const activeNode = store.activeNodeId ? hydratedNodes[store.activeNodeId] : null
+  const selectedNode = store.selectedNodeId ? hydratedNodes[store.selectedNodeId] : null
 
   // Get path to active node for breadcrumb
   const getPathToNode = useCallback(
@@ -133,7 +189,6 @@ export function usePipeline() {
       const node = store.getNode(nodeId)
       if (!node || node.type !== 'view') return false
 
-      const view = node as DataView
       const parents = store.getNodeParents(nodeId)
       if (parents.length !== 1) return false
 
@@ -157,7 +212,7 @@ export function usePipeline() {
 
           const childView = child as DataView
           const operation = childView.operation
-          const otherParents = childView.parentIds.filter((id) => id !== nodeId)
+          const otherParents = store.getNodeParents(childId).filter((id) => id !== nodeId)
 
           const newView = await views.applyOperation(parentId, operation, otherParents)
           if (newView) {
@@ -167,30 +222,33 @@ export function usePipeline() {
             for (const gcId of grandchildren) {
               const gc = store.getNode(gcId)
               if (gc && gc.type === 'view') {
-                const gcView = gc as DataView
-                const newParentIds = gcView.parentIds.map((pid) => (pid === childId ? newView.id : pid))
-                usePipelineStore.getState().updateView(gcId, { parentIds: newParentIds })
+                const newParentIds = store.getNodeParents(gcId).map((pid) => (pid === childId ? newView.id : pid))
+                usePipelineStore.getState().setNodeParents(gcId, newParentIds)
               }
             }
           }
 
-          await service.dropView(childView.tableName)
+          const childRuntime = usePipelineRuntimeStore.getState().nodes[childId]
+          if (childRuntime?.tableName) {
+            await service.dropView(childRuntime.tableName)
+          }
         }
 
-        await service.dropView(view.tableName)
+        const viewRuntime = usePipelineRuntimeStore.getState().nodes[nodeId]
+        if (viewRuntime?.tableName) {
+          await service.dropView(viewRuntime.tableName)
+        }
 
         const state = usePipelineStore.getState()
-        const newNodes = { ...state.nodes }
-        delete newNodes[nodeId]
+        const wasActive = state.activeNodeId === nodeId
+        const wasSelected = state.selectedNodeId === nodeId
 
-        const newEdges = state.edges.filter((e) => e.sourceId !== nodeId && e.targetId !== nodeId)
+        await dispatch({ type: 'removeNode', nodeId, cascade: false, suppressEffects: true })
 
-        usePipelineStore.setState({ nodes: newNodes, edges: newEdges })
-
-        if (state.activeNodeId === nodeId) {
+        if (wasActive) {
           usePipelineStore.getState().setActiveNode(parentId)
         }
-        if (state.selectedNodeId === nodeId) {
+        if (wasSelected) {
           usePipelineStore.getState().selectNode(null)
         }
 
@@ -202,7 +260,7 @@ export function usePipeline() {
         setLoading(false)
       }
     },
-    [service, store, views, setLoading, setError]
+    [service, store, views, setLoading, setError, dispatch]
   )
 
   // Cleanup orphans
@@ -213,7 +271,8 @@ export function usePipeline() {
       const trackedViewNames = new Set(
         Object.values(store.nodes)
           .filter((n): n is DataView => n.type === 'view')
-          .map((v) => v.tableName)
+          .map((v) => usePipelineRuntimeStore.getState().nodes[v.id]?.tableName)
+          .filter((name): name is string => !!name)
       )
 
       await service.cleanupOrphanedViews(trackedViewNames)
@@ -226,6 +285,7 @@ export function usePipeline() {
   const clearAllData = useCallback(async () => {
     if (!service) {
       store.reset()
+      usePipelineUiStore.getState().reset()
       return
     }
 
@@ -237,6 +297,7 @@ export function usePipeline() {
     } finally {
       setLoading(false)
       store.reset()
+      usePipelineUiStore.getState().reset()
     }
   }, [service, store, setLoading])
 
@@ -249,7 +310,7 @@ export function usePipeline() {
       if (!service) return null
 
       const state = usePipelineStore.getState()
-      const pendingEdit = state.pendingBranchEdit
+      const pendingEdit = usePipelineUiStore.getState().pendingBranchEdit
       if (!pendingEdit) return null
 
       const viewId = pendingEdit.viewId
@@ -265,17 +326,24 @@ export function usePipeline() {
 
       const parentNode = usePipelineStore.getState().nodes[parentId]
       if (!parentNode) return null
+      const parentRuntime = usePipelineRuntimeStore.getState().nodes[parentId]
+      if (!parentRuntime?.tableName || !parentRuntime.columns) return null
 
       const children = getChildren(parentId, usePipelineStore.getState().edges)
       const yOffset = children.length * 80
+      const parentLayout = usePipelineLayoutStore.getState().nodes[parentId]
+      const basePosition = parentLayout?.position ?? { x: 100, y: 100 }
       const position = {
-        x: parentNode.position.x + 350,
-        y: parentNode.position.y + yOffset,
+        x: basePosition.x + 350,
+        y: basePosition.y + yOffset,
       }
 
       try {
-        const view = await service.createView(parentNode, modifiedOperation, undefined, position)
-        store.addView(view)
+        const { view, runtime, parentIds } = await service.createView(
+          { node: parentNode, runtime: parentRuntime },
+          modifiedOperation
+        )
+        store.addView(view, parentIds, runtime, { position })
         usePipelineStore.getState().replaceActiveTab(viewId, view.id)
         return view
       } catch (err) {
@@ -289,7 +357,7 @@ export function usePipeline() {
   return {
     // State
     serviceReady: !!service,
-    nodes: store.nodes,
+    nodes: hydratedNodes,
     edges: store.edges,
     activeNodeId: store.activeNodeId,
     selectedNodeId: store.selectedNodeId,
@@ -377,7 +445,7 @@ export function usePipeline() {
     loadSession: session.loadSession,
     openRecentSession: session.openRecentSession,
     generateShareUrl: session.generateShareUrl,
-    pendingSession: store.pendingSession,
+    pendingSession,
     continuePendingSession: session.continuePendingSession,
     cancelPendingSession: session.cancelPendingSession,
 
@@ -393,13 +461,13 @@ export function usePipeline() {
     restorePendingSession: session.restorePendingSession,
 
     // Visual restoration mode
-    restorationState: store.restorationState,
+    restorationState,
     startRestorationMode: session.startRestorationMode,
     provideFileForRestoration: session.provideFileForRestoration,
     completeRestoration: session.completeRestoration,
     cancelRestoration: session.cancelRestoration,
-    skipDatasetRestoration: store.skipDataset,
-    unskipDatasetRestoration: store.unskipDataset,
+    skipDatasetRestoration: skipDataset,
+    unskipDatasetRestoration: unskipDataset,
     isRestorationReady: session.isRestorationReady,
     getRestorationProgress: session.getRestorationProgress,
 

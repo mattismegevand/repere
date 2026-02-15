@@ -1,9 +1,9 @@
 import { Panel, useReactFlow } from '@xyflow/react'
-import { LayoutGrid } from 'lucide-react'
+import LayoutGrid from 'lucide-react/dist/esm/icons/layout-grid'
 import { useCallback } from 'react'
 
 import { getLayoutedPositions } from '@/lib/graph/auto-layout'
-import { usePipelineStore } from '@/stores'
+import { usePipelineStore } from '@/stores/pipelineStore'
 
 export function AutoLayoutPanel() {
   const { getNodes, getEdges, setNodes, fitView } = useReactFlow()

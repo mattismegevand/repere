@@ -1,5 +1,14 @@
 import { getChildren, getDescendants, getParents } from '@/lib/graph'
-import type { Dataset, DataView, PipelineEdge, PipelineNode } from '@/types'
+import type {
+  ChartNode,
+  DashboardNode,
+  Dataset,
+  DataView,
+  ExportNode,
+  PipelineEdge,
+  PipelineNode,
+  PythonNode,
+} from '@/types'
 import type { CommandResult, PipelineCommand, PipelineEffect, PipelineSnapshot, PipelineState } from './types'
 
 const MAX_UNDO_STACK_SIZE = 50
@@ -10,22 +19,81 @@ const MAX_UNDO_STACK_SIZE = 50
  */
 // biome-ignore lint/complexity/noStaticOnlyClass: intentional - groups related pure functions under a namespace
 export class PipelineEngine {
+  private static addEdgesForNode(edges: PipelineEdge[], nodeId: string, parentIds: string[]): PipelineEdge[] {
+    if (parentIds.length === 0) return edges
+    const nextEdges = [...edges]
+    for (const parentId of parentIds) {
+      nextEdges.push({
+        id: `${parentId}-${nodeId}`,
+        sourceId: parentId,
+        targetId: nodeId,
+      })
+    }
+    return nextEdges
+  }
+
+  private static replaceEdgesForNode(edges: PipelineEdge[], nodeId: string, parentIds: string[]): PipelineEdge[] {
+    const nextEdges = edges.filter((edge) => edge.targetId !== nodeId)
+    return PipelineEngine.addEdgesForNode(nextEdges, nodeId, parentIds)
+  }
+
+  private static addNode(
+    state: PipelineState,
+    node: PipelineNode,
+    parentIds: string[],
+    options?: { openTab?: boolean }
+  ): PipelineState {
+    const edges = PipelineEngine.addEdgesForNode(state.edges, node.id, parentIds)
+    const openNodeIds = options?.openTab
+      ? state.openNodeIds.includes(node.id)
+        ? state.openNodeIds
+        : [...state.openNodeIds, node.id]
+      : state.openNodeIds
+
+    return {
+      ...state,
+      nodes: { ...state.nodes, [node.id]: node },
+      edges,
+      activeNodeId: node.id,
+      selectedNodeId: node.id,
+      openNodeIds,
+    }
+  }
+
   /**
    * Execute a command and return the new state plus effects to execute.
    */
   static execute(state: PipelineState, command: PipelineCommand): CommandResult {
     switch (command.type) {
       case 'addDataset':
-        return PipelineEngine.addDataset(state, command.dataset)
+        return PipelineEngine.addDataset(state, command.dataset, command.suppressEffects)
 
       case 'addView':
-        return PipelineEngine.addView(state, command.view, command.parentId)
+        return PipelineEngine.addView(state, command.view, command.parentIds, command.suppressEffects)
+
+      case 'addChartNode':
+        return PipelineEngine.addChartNode(state, command.chart, command.parentId)
+
+      case 'addExportNode':
+        return PipelineEngine.addExportNode(state, command.exportNode, command.parentId)
+
+      case 'addDashboardNode':
+        return PipelineEngine.addDashboardNode(state, command.dashboard, command.parentIds, command.suppressEffects)
+
+      case 'addPythonNode':
+        return PipelineEngine.addPythonNode(state, command.pythonNode, command.parentId)
 
       case 'removeNode':
-        return PipelineEngine.removeNode(state, command.nodeId, command.cascade)
+        return PipelineEngine.removeNode(state, command.nodeId, command.cascade, command.suppressEffects)
 
       case 'updateNode':
         return PipelineEngine.updateNode(state, command.nodeId, command.updates)
+
+      case 'updateNodes':
+        return PipelineEngine.updateNodes(state, command.updates, command.suppressEffects)
+
+      case 'setNodeParents':
+        return PipelineEngine.setNodeParents(state, command.nodeId, command.parentIds, command.suppressEffects)
 
       case 'setActiveNode':
         return PipelineEngine.setActiveNode(state, command.nodeId)
@@ -57,16 +125,9 @@ export class PipelineEngine {
   /**
    * Add a dataset to the pipeline.
    */
-  private static addDataset(state: PipelineState, dataset: Dataset): CommandResult {
-    const newState: PipelineState = {
-      ...state,
-      nodes: { ...state.nodes, [dataset.id]: dataset },
-      activeNodeId: dataset.id,
-      selectedNodeId: dataset.id,
-      openNodeIds: [...state.openNodeIds, dataset.id],
-    }
-
-    const effects: PipelineEffect[] = [{ type: 'persist.markDirty' }]
+  private static addDataset(state: PipelineState, dataset: Dataset, suppressEffects = false): CommandResult {
+    const newState = PipelineEngine.addNode(state, dataset, [], { openTab: true })
+    const effects: PipelineEffect[] = suppressEffects ? [] : [{ type: 'persist.markDirty' }]
 
     return { state: newState, effects }
   }
@@ -74,34 +135,48 @@ export class PipelineEngine {
   /**
    * Add a view with edges from parent.
    */
-  private static addView(state: PipelineState, view: DataView, parentId: string): CommandResult {
-    // Create edges from all parents to this view
-    const newEdges = [...state.edges]
-    for (const pid of view.parentIds) {
-      newEdges.push({
-        id: `${pid}-${view.id}`,
-        sourceId: pid,
-        targetId: view.id,
-      })
-    }
+  private static addView(
+    state: PipelineState,
+    view: DataView,
+    parentIds: string[],
+    suppressEffects = false
+  ): CommandResult {
+    const newState = PipelineEngine.addNode(state, view, parentIds)
 
-    const newState: PipelineState = {
-      ...state,
-      nodes: { ...state.nodes, [view.id]: view },
-      edges: newEdges,
-      activeNodeId: view.id,
-      selectedNodeId: view.id,
-    }
+    const effects: PipelineEffect[] = suppressEffects ? [] : [{ type: 'persist.markDirty' }]
 
-    const effects: PipelineEffect[] = [
-      {
-        type: 'duckdb.createView',
-        viewName: view.tableName,
-        sql: view.viewSql,
-        parentTableName: parentId,
-      },
-      { type: 'persist.markDirty' },
-    ]
+    return { state: newState, effects }
+  }
+
+  private static addChartNode(state: PipelineState, chart: ChartNode, parentId: string): CommandResult {
+    const newState = PipelineEngine.addNode(state, chart, parentId ? [parentId] : [])
+    const effects: PipelineEffect[] = [{ type: 'persist.markDirty' }]
+
+    return { state: newState, effects }
+  }
+
+  private static addExportNode(state: PipelineState, exportNode: ExportNode, parentId: string): CommandResult {
+    const newState = PipelineEngine.addNode(state, exportNode, parentId ? [parentId] : [])
+    const effects: PipelineEffect[] = [{ type: 'persist.markDirty' }]
+
+    return { state: newState, effects }
+  }
+
+  private static addDashboardNode(
+    state: PipelineState,
+    dashboard: DashboardNode,
+    parentIds: string[],
+    suppressEffects = false
+  ): CommandResult {
+    const newState = PipelineEngine.addNode(state, dashboard, parentIds)
+    const effects: PipelineEffect[] = suppressEffects ? [] : [{ type: 'persist.markDirty' }]
+
+    return { state: newState, effects }
+  }
+
+  private static addPythonNode(state: PipelineState, pythonNode: PythonNode, parentId: string): CommandResult {
+    const newState = PipelineEngine.addNode(state, pythonNode, parentId ? [parentId] : [])
+    const effects: PipelineEffect[] = [{ type: 'persist.markDirty' }]
 
     return { state: newState, effects }
   }
@@ -109,7 +184,12 @@ export class PipelineEngine {
   /**
    * Remove a node (and optionally cascade to descendants).
    */
-  private static removeNode(state: PipelineState, nodeId: string, cascade = true): CommandResult {
+  private static removeNode(
+    state: PipelineState,
+    nodeId: string,
+    cascade = true,
+    suppressEffects = false
+  ): CommandResult {
     const node = state.nodes[nodeId]
     if (!node) {
       return { state, effects: [] }
@@ -123,19 +203,6 @@ export class PipelineEngine {
       allToRemove = [nodeId, ...descendants]
     } else {
       allToRemove = [nodeId]
-    }
-
-    // Collect views to drop
-    const viewsToDrop: string[] = []
-    for (const id of allToRemove) {
-      const n = state.nodes[id]
-      if (n && n.type === 'view') {
-        viewsToDrop.push((n as DataView).tableName)
-      }
-    }
-
-    if (viewsToDrop.length > 0) {
-      effects.push({ type: 'duckdb.dropViews', viewNames: viewsToDrop })
     }
 
     // Remove nodes
@@ -166,7 +233,9 @@ export class PipelineEngine {
       selectedNodeId: removeSet.has(state.selectedNodeId ?? '') ? null : state.selectedNodeId,
     }
 
-    effects.push({ type: 'persist.markDirty' })
+    if (!suppressEffects) {
+      effects.push({ type: 'persist.markDirty' })
+    }
 
     return { state: newState, effects }
   }
@@ -182,37 +251,50 @@ export class PipelineEngine {
 
     const updatedNode = { ...node, ...updates } as PipelineNode
 
-    // If parentIds changed for a view, update edges
-    let newEdges = state.edges
-    if ('parentIds' in updates && node.type === 'view') {
-      newEdges = state.edges.filter((e) => e.targetId !== nodeId)
-      for (const parentId of (updates as Partial<DataView>).parentIds!) {
-        newEdges.push({
-          id: `${parentId}-${nodeId}`,
-          sourceId: parentId,
-          targetId: nodeId,
-        })
-      }
-    }
-
     const newState: PipelineState = {
       ...state,
       nodes: { ...state.nodes, [nodeId]: updatedNode },
-      edges: newEdges,
+      edges: state.edges,
     }
 
     const effects: PipelineEffect[] = []
 
-    // If view SQL changed, update the DuckDB view
-    if ('viewSql' in updates && node.type === 'view') {
-      effects.push({
-        type: 'duckdb.updateView',
-        viewName: (node as DataView).tableName,
-        sql: (updates as Partial<DataView>).viewSql!,
-      })
+    return { state: newState, effects }
+  }
+
+  private static updateNodes(
+    state: PipelineState,
+    updates: Record<string, Partial<PipelineNode>>,
+    suppressEffects = false
+  ): CommandResult {
+    let nextState = state
+    const effects: PipelineEffect[] = []
+
+    for (const [nodeId, patch] of Object.entries(updates)) {
+      const result = PipelineEngine.updateNode(nextState, nodeId, patch)
+      nextState = result.state
+      if (!suppressEffects) {
+        effects.push(...result.effects)
+      }
     }
 
-    return { state: newState, effects }
+    return { state: nextState, effects }
+  }
+
+  private static setNodeParents(
+    state: PipelineState,
+    nodeId: string,
+    parentIds: string[],
+    suppressEffects = false
+  ): CommandResult {
+    if (!state.nodes[nodeId]) {
+      return { state, effects: [] }
+    }
+
+    const newEdges = PipelineEngine.replaceEdgesForNode(state.edges, nodeId, parentIds)
+    const effects: PipelineEffect[] = suppressEffects ? [] : [{ type: 'persist.markDirty' }]
+
+    return { state: { ...state, edges: newEdges }, effects }
   }
 
   /**
@@ -388,56 +470,8 @@ export class PipelineEngine {
   /**
    * Compute effects needed to transition from current state to target snapshot.
    */
-  private static computeViewDiffEffects(current: PipelineState, target: PipelineSnapshot): PipelineEffect[] {
-    const effects: PipelineEffect[] = []
-
-    const currentViews = new Map<string, DataView>()
-    const targetViews = new Map<string, DataView>()
-
-    for (const node of Object.values(current.nodes)) {
-      if (node.type === 'view') {
-        currentViews.set(node.id, node as DataView)
-      }
-    }
-
-    for (const node of Object.values(target.nodes)) {
-      if (node.type === 'view') {
-        targetViews.set(node.id, node as DataView)
-      }
-    }
-
-    // Views to drop (in current but not in target)
-    const viewsToDrop: string[] = []
-    for (const [id, view] of currentViews) {
-      if (!targetViews.has(id)) {
-        viewsToDrop.push(view.tableName)
-      }
-    }
-
-    if (viewsToDrop.length > 0) {
-      effects.push({ type: 'duckdb.dropViews', viewNames: viewsToDrop })
-    }
-
-    // Views to create (in target but not in current)
-    for (const [id, view] of targetViews) {
-      if (!currentViews.has(id)) {
-        const parentId = view.parentIds[0]
-        const parent = target.nodes[parentId]
-        const parentTableName =
-          parent?.type === 'dataset' ? (parent as Dataset).tableName : (parent as DataView)?.tableName
-
-        if (parentTableName) {
-          effects.push({
-            type: 'duckdb.createView',
-            viewName: view.tableName,
-            sql: view.viewSql,
-            parentTableName,
-          })
-        }
-      }
-    }
-
-    return effects
+  private static computeViewDiffEffects(_current: PipelineState, _target: PipelineSnapshot): PipelineEffect[] {
+    return []
   }
 
   // ========================================

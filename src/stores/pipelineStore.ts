@@ -1,9 +1,10 @@
-import { applyPatches, enablePatches, type Patch, produceWithPatches } from 'immer'
+import { applyPatches, enablePatches, produceWithPatches } from 'immer'
 import { create } from 'zustand'
 import { subscribeWithSelector } from 'zustand/middleware'
+import { type PipelineState as CorePipelineState, type PipelineCommand, PipelineEngine } from '@/lib/core'
 import { getChildren, getDescendants, getParents, getRootNodes } from '@/lib/graph'
-import { generateId, generateShortId } from '@/lib/id'
-import type { RequiredFile, SchemaValidationResult, SessionData } from '@/lib/pipeline/persistence'
+import { generateShortId } from '@/lib/id'
+import { type HydratedNode, hydrateNode, hydrateNodes } from '@/lib/pipeline/hydration'
 import type {
   ChartNode,
   DashboardNode,
@@ -13,80 +14,18 @@ import type {
   PipelineEdge,
   PipelineNode,
   PythonNode,
-  ViewOperation,
 } from '@/types'
+import type { NodeLayout } from '@/types/pipelineLayout'
+import type { NodeRuntime } from '@/types/pipelineRuntime'
+import { usePipelineLayoutStore } from './pipelineLayoutStore'
+import { usePipelineRuntimeStore } from './pipelineRuntimeStore'
+import type { PipelineSnapshot } from './pipelineTypes'
+import { usePipelineUiStore } from './pipelineUiStore'
 
 // Enable Immer patches for efficient undo/redo
 enablePatches()
 
-// Snapshot-based undo/redo with optional Immer patches for efficiency
-export interface PipelineSnapshot {
-  nodes: Record<string, PipelineNode>
-  edges: PipelineEdge[]
-  activeNodeId: string | null
-  selectedNodeId: string | null
-  openNodeIds: string[]
-  timestamp: number
-  // Optional Immer patches for efficient storage (when using patch-based mutations)
-  patches?: Patch[]
-  inversePatches?: Patch[]
-}
-
 const MAX_UNDO_STACK_SIZE = 50
-
-// Track edits made to views with children (for deferred branching)
-interface PendingBranchEdit {
-  viewId: string
-  snapshotBefore: PipelineSnapshot
-  pendingOperation?: ViewOperation // ViewOperation that was blocked and should be applied after branch decision
-}
-
-// Pending session state for when files need to be re-uploaded
-interface PendingSession {
-  data: SessionData
-  providedFiles: Map<string, File>
-}
-
-// ============================================
-// RESTORATION STATE
-// ============================================
-
-export type DatasetRestorationStatus =
-  | 'embedded' // Data is embedded in session, no file needed
-  | 'required' // Needs file, not yet provided
-  | 'validating' // File provided, checking schema
-  | 'provided' // File provided, schema valid
-  | 'error' // Schema mismatch
-
-export interface DatasetRestorationInfo {
-  nodeId: string
-  fileName: string
-  status: DatasetRestorationStatus
-  file?: File // The provided file (if any)
-  validationResult?: SchemaValidationResult // Schema validation result (if validated)
-  expectedColumns: RequiredFile['expectedColumns'] // Expected schema
-  expectedHash?: string // Original file hash (if available)
-  isExactMatch?: boolean // True if provided file hash matches original
-}
-
-export interface RestorationState {
-  session: SessionData
-  datasets: Map<string, DatasetRestorationInfo> // nodeId -> restoration info
-  skippedDatasets: Set<string> // Datasets user chose to skip
-}
-
-// ============================================
-// PIPELINE MODE (explicit state machine)
-// ============================================
-
-/**
- * Pipeline mode - only one mode can be active at a time.
- */
-type PipelineMode =
-  | { type: 'normal' }
-  | { type: 'restoring'; state: RestorationState }
-  | { type: 'branching'; viewId: string; snapshotBefore: PipelineSnapshot; pendingOperation?: ViewOperation }
-  | { type: 'loading'; data: SessionData; providedFiles: Map<string, File> }
 
 // Re-export graph utilities
 export { getChildren, getDescendants, getParents } from '@/lib/graph'
@@ -110,23 +49,6 @@ interface PipelineState {
   // Undo/redo stacks (snapshot-based)
   undoStack: PipelineSnapshot[]
   redoStack: PipelineSnapshot[]
-
-  // Loading/error/success state
-  loading: boolean
-  error: string | null
-  successMessage: string | null
-
-  // Pipeline mode (explicit state machine - only one mode active at a time)
-  mode: PipelineMode
-
-  // Version counter - incremented when data changes to trigger chart refreshes
-  dataVersion: number
-
-  // Track when nodes were last viewed (for sorting in command palette)
-  nodeViewTimes: Record<string, number>
-
-  // Current session ID for auto-save (null = no session yet, will be created on first save)
-  currentSessionId: string | null
 }
 
 // ============================================
@@ -135,35 +57,36 @@ interface PipelineState {
 
 interface PipelineActions {
   // Dataset management
-  addDataset: (dataset: Dataset) => void
+  addDataset: (dataset: Dataset, runtime: NodeRuntime, layout: NodeLayout) => void
   removeDataset: (id: string) => string[] // Returns removed view IDs for cleanup
 
   // View management
-  addView: (view: DataView) => void
+  addView: (view: DataView, parentIds: string[], runtime: NodeRuntime, layout: NodeLayout) => void
   removeView: (id: string) => string[] // Returns removed view IDs for cleanup
-  updateView: (id: string, updates: Partial<DataView>) => void // Updates view and its edges
+  updateView: (id: string, updates: Partial<DataView> & Partial<NodeRuntime>) => void // Updates view and runtime
 
   // Chart/Export/Dashboard management (terminal nodes - no DuckDB views)
-  addChartNode: (chart: ChartNode) => void
-  addExportNode: (exportNode: ExportNode) => void
-  addDashboardNode: (dashboard: DashboardNode) => void
+  addChartNode: (chart: ChartNode, parentId: string, runtime: NodeRuntime, layout: NodeLayout) => void
+  addExportNode: (exportNode: ExportNode, parentId: string, runtime: NodeRuntime, layout: NodeLayout) => void
+  addDashboardNode: (dashboard: DashboardNode, parentIds: string[], layout: NodeLayout) => void
   removeTerminalNode: (id: string) => string[] // Returns removed node IDs
-  updateChartNode: (id: string, updates: Partial<ChartNode>) => void
-  updateExportNode: (id: string, updates: Partial<ExportNode>) => void
+  updateChartNode: (id: string, updates: Partial<ChartNode> & Partial<NodeRuntime>) => void
+  updateExportNode: (id: string, updates: Partial<ExportNode> & Partial<NodeRuntime>) => void
   updateDashboardNode: (id: string, updates: Partial<DashboardNode>) => void
 
   // Python node management (creates DuckDB TABLE, not VIEW)
-  addPythonNode: (pythonNode: PythonNode) => void
+  addPythonNode: (pythonNode: PythonNode, parentId: string, runtime: NodeRuntime, layout: NodeLayout) => void
   removePythonNode: (id: string) => string[] // Returns removed node IDs
-  updatePythonNode: (id: string, updates: Partial<PythonNode>) => void
+  updatePythonNode: (id: string, updates: Partial<PythonNode> & Partial<NodeRuntime>) => void
 
   // Node operations
   updateNodePosition: (id: string, position: { x: number; y: number }) => void
   updateNodeName: (id: string, name: string) => void
   updateNodeRowCount: (id: string, rowCount: number) => void
-  updateNode: (id: string, updates: Partial<PipelineNode>) => void
-  updateNodes: (updates: Record<string, Partial<PipelineNode>>) => void // Batch update multiple nodes
+  updateNode: (id: string, updates: Partial<PipelineNode> & Partial<NodeRuntime> & Partial<NodeLayout>) => void
+  updateNodes: (updates: Record<string, Partial<PipelineNode> & Partial<NodeRuntime> & Partial<NodeLayout>>) => void // Batch update multiple nodes
   toggleNodeExpanded: (id: string) => void
+  setNodeParents: (id: string, parentIds: string[]) => void
 
   // Selection
   selectNode: (id: string | null) => void
@@ -194,40 +117,15 @@ interface PipelineActions {
   }
 
   // State management
-  setLoading: (loading: boolean) => void
-  setError: (error: string | null) => void
-  setSuccessMessage: (message: string | null) => void
   reset: () => void
-
-  // Mode management (state machine)
-  setMode: (mode: PipelineMode) => void
-  enterRestorationMode: (state: RestorationState) => void
-  exitRestorationMode: () => void
-  enterBranchingMode: (viewId: string, snapshotBefore: PipelineSnapshot, pendingOperation?: ViewOperation) => void
-  exitBranchingMode: () => void
-  enterLoadingMode: (data: SessionData, providedFiles: Map<string, File>) => void
-  exitLoadingMode: () => void
-  updateDatasetRestoration: (nodeId: string, update: Partial<DatasetRestorationInfo>) => void
-  skipDataset: (nodeId: string) => void
-  unskipDataset: (nodeId: string) => void
-
-  // Derived state from mode (computed by deriveFromMode)
-  restorationState: RestorationState | null
-  pendingBranchEdit: PendingBranchEdit | null
-  pendingSession: PendingSession | null
-
-  // Data version (for cache invalidation)
-  bumpDataVersion: () => void
-
-  // Session ID management
-  setCurrentSessionId: (id: string | null) => void
-  generateNewSessionId: () => string
 
   // Duplicate branch
   duplicateBranch: (nodeId: string) => { newRootId: string; idMap: Record<string, string> } | null
 
   // Computed getters (as functions)
   getNode: (id: string) => PipelineNode | undefined
+  getHydratedNode: (id: string) => HydratedNode | undefined
+  getHydratedNodes: () => Record<string, HydratedNode>
   getNodeChildren: (id: string) => string[]
   getNodeParents: (id: string) => string[]
   getNodeDescendants: (id: string) => string[]
@@ -247,41 +145,7 @@ interface PipelineActions {
 // INITIAL STATE
 // ============================================
 
-// Helper to compute derived state from mode
-function deriveFromMode(mode: PipelineMode): {
-  restorationState: RestorationState | null
-  pendingBranchEdit: PendingBranchEdit | null
-  pendingSession: PendingSession | null
-} {
-  if (mode.type === 'restoring') {
-    return { restorationState: mode.state, pendingBranchEdit: null, pendingSession: null }
-  }
-  if (mode.type === 'branching') {
-    return {
-      restorationState: null,
-      pendingBranchEdit: {
-        viewId: mode.viewId,
-        snapshotBefore: mode.snapshotBefore,
-        pendingOperation: mode.pendingOperation,
-      },
-      pendingSession: null,
-    }
-  }
-  if (mode.type === 'loading') {
-    return {
-      restorationState: null,
-      pendingBranchEdit: null,
-      pendingSession: { data: mode.data, providedFiles: mode.providedFiles },
-    }
-  }
-  return { restorationState: null, pendingBranchEdit: null, pendingSession: null }
-}
-
-const initialState: PipelineState & {
-  restorationState: RestorationState | null
-  pendingBranchEdit: PendingBranchEdit | null
-  pendingSession: PendingSession | null
-} = {
+const initialState: PipelineState = {
   nodes: {},
   edges: [],
   selectedNodeId: null,
@@ -289,17 +153,6 @@ const initialState: PipelineState & {
   openNodeIds: [],
   undoStack: [],
   redoStack: [],
-  loading: false,
-  error: null,
-  successMessage: null,
-  mode: { type: 'normal' },
-  dataVersion: 0,
-  nodeViewTimes: {},
-  currentSessionId: null,
-  // Derived from mode
-  restorationState: null,
-  pendingBranchEdit: null,
-  pendingSession: null,
 }
 
 // ============================================
@@ -307,972 +160,719 @@ const initialState: PipelineState & {
 // ============================================
 
 export const usePipelineStore = create<PipelineState & PipelineActions>()(
-  subscribeWithSelector((set, get) => ({
-    ...initialState,
-
-    // ----------------------------------------
-    // Dataset Management
-    // ----------------------------------------
-
-    addDataset: (dataset) => {
-      set((state) => ({
-        nodes: { ...state.nodes, [dataset.id]: dataset },
-        activeNodeId: dataset.id,
-        selectedNodeId: dataset.id,
-        openNodeIds: [...state.openNodeIds, dataset.id],
-      }))
-    },
-
-    removeDataset: (id) => {
+  subscribeWithSelector((set, get) => {
+    const applyEngineCommand = (command: PipelineCommand) => {
       const state = get()
-      const descendants = getDescendants(id, state.edges)
-      const allToRemove = [id, ...descendants]
-
-      set((state) => {
-        // Remove nodes
-        const newNodes = { ...state.nodes }
-        for (const nodeId of allToRemove) {
-          delete newNodes[nodeId]
-        }
-
-        // Remove edges
-        const removeSet = new Set(allToRemove)
-        const newEdges = state.edges.filter((e) => !removeSet.has(e.sourceId) && !removeSet.has(e.targetId))
-
-        // Update open tabs
-        const newOpenIds = state.openNodeIds.filter((nid) => !removeSet.has(nid))
-
-        // Update selection
-        const newActiveId =
-          state.activeNodeId && removeSet.has(state.activeNodeId)
-            ? (newOpenIds[newOpenIds.length - 1] ?? null)
-            : state.activeNodeId
-
-        return {
-          nodes: newNodes,
-          edges: newEdges,
-          openNodeIds: newOpenIds,
-          activeNodeId: newActiveId,
-          selectedNodeId: removeSet.has(state.selectedNodeId ?? '') ? null : state.selectedNodeId,
-        }
-      })
-
-      return descendants // Return view IDs that need DuckDB cleanup
-    },
-
-    // ----------------------------------------
-    // View Management
-    // ----------------------------------------
-
-    addView: (view) => {
-      set((state) => {
-        // Create edges from parents to this view
-        const newEdges = [...state.edges]
-        for (const parentId of view.parentIds) {
-          newEdges.push({
-            id: `${parentId}-${view.id}`,
-            sourceId: parentId,
-            targetId: view.id,
-          })
-        }
-
-        return {
-          nodes: { ...state.nodes, [view.id]: view },
-          edges: newEdges,
-          activeNodeId: view.id,
-          selectedNodeId: view.id,
-        }
-      })
-    },
-
-    removeView: (id) => {
-      const state = get()
-      const node = state.nodes[id]
-      if (!node || node.type !== 'view') return []
-
-      const descendants = getDescendants(id, state.edges)
-      const allToRemove = [id, ...descendants]
-
-      set((state) => {
-        // Remove nodes
-        const newNodes = { ...state.nodes }
-        for (const nodeId of allToRemove) {
-          delete newNodes[nodeId]
-        }
-
-        // Remove edges
-        const removeSet = new Set(allToRemove)
-        const newEdges = state.edges.filter((e) => !removeSet.has(e.sourceId) && !removeSet.has(e.targetId))
-
-        // Update open tabs
-        const newOpenIds = state.openNodeIds.filter((nid) => !removeSet.has(nid))
-
-        // Update selection
-        const newActiveId =
-          state.activeNodeId && removeSet.has(state.activeNodeId)
-            ? (newOpenIds[newOpenIds.length - 1] ?? null)
-            : state.activeNodeId
-
-        return {
-          nodes: newNodes,
-          edges: newEdges,
-          openNodeIds: newOpenIds,
-          activeNodeId: newActiveId,
-          selectedNodeId: removeSet.has(state.selectedNodeId ?? '') ? null : state.selectedNodeId,
-        }
-      })
-
-      return allToRemove // Return all view IDs for DuckDB cleanup
-    },
-
-    updateView: (id, updates) => {
-      set((state) => {
-        const node = state.nodes[id]
-        if (!node || node.type !== 'view') return state
-
-        const view = node as DataView
-        const updatedView = { ...view, ...updates } as DataView
-
-        // If parentIds changed, update edges
-        let newEdges = state.edges
-        if (updates.parentIds) {
-          // Remove old edges pointing to this view
-          newEdges = state.edges.filter((e) => e.targetId !== id)
-          // Add new edges from new parents
-          for (const parentId of updates.parentIds) {
-            newEdges.push({
-              id: `${parentId}-${id}`,
-              sourceId: parentId,
-              targetId: id,
-            })
-          }
-        }
-
-        return {
-          nodes: { ...state.nodes, [id]: updatedView },
-          edges: newEdges,
-        }
-      })
-    },
-
-    // ----------------------------------------
-    // Chart/Export Management (terminal nodes)
-    // ----------------------------------------
-
-    addChartNode: (chart) => {
-      set((state) => {
-        // Create edge from parent to chart
-        const newEdge: PipelineEdge = {
-          id: `${chart.parentId}-${chart.id}`,
-          sourceId: chart.parentId,
-          targetId: chart.id,
-        }
-
-        return {
-          nodes: { ...state.nodes, [chart.id]: chart },
-          edges: [...state.edges, newEdge],
-          activeNodeId: chart.id,
-          selectedNodeId: chart.id,
-        }
-      })
-    },
-
-    addExportNode: (exportNode) => {
-      set((state) => {
-        // Create edge from parent to export
-        const newEdge: PipelineEdge = {
-          id: `${exportNode.parentId}-${exportNode.id}`,
-          sourceId: exportNode.parentId,
-          targetId: exportNode.id,
-        }
-
-        return {
-          nodes: { ...state.nodes, [exportNode.id]: exportNode },
-          edges: [...state.edges, newEdge],
-          activeNodeId: exportNode.id,
-          selectedNodeId: exportNode.id,
-        }
-      })
-    },
-
-    removeTerminalNode: (id) => {
-      const state = get()
-      const node = state.nodes[id]
-      if (!node || (node.type !== 'chart' && node.type !== 'export' && node.type !== 'dashboard')) return []
-
-      // Terminal nodes have no descendants, just remove the node
-      set((state) => {
-        const newNodes = { ...state.nodes }
-        delete newNodes[id]
-
-        const newEdges = state.edges.filter((e) => e.targetId !== id)
-        const newOpenIds = state.openNodeIds.filter((nid) => nid !== id)
-        const newActiveId = state.activeNodeId === id ? (newOpenIds[newOpenIds.length - 1] ?? null) : state.activeNodeId
-
-        return {
-          nodes: newNodes,
-          edges: newEdges,
-          openNodeIds: newOpenIds,
-          activeNodeId: newActiveId,
-          selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
-        }
-      })
-
-      return [id]
-    },
-
-    updateChartNode: (id, updates) => {
-      set((state) => {
-        const node = state.nodes[id]
-        if (!node || node.type !== 'chart') return state
-
-        const chart = node as ChartNode
-        const updatedChart = { ...chart, ...updates } as ChartNode
-
-        // If parentId changed, update edges
-        let newEdges = state.edges
-        if (updates.parentId && updates.parentId !== chart.parentId) {
-          newEdges = state.edges.filter((e) => e.targetId !== id)
-          newEdges.push({
-            id: `${updates.parentId}-${id}`,
-            sourceId: updates.parentId,
-            targetId: id,
-          })
-        }
-
-        return {
-          nodes: { ...state.nodes, [id]: updatedChart },
-          edges: newEdges,
-        }
-      })
-    },
-
-    updateExportNode: (id, updates) => {
-      set((state) => {
-        const node = state.nodes[id]
-        if (!node || node.type !== 'export') return state
-
-        const exportNode = node as ExportNode
-        const updatedExport = { ...exportNode, ...updates } as ExportNode
-
-        // If parentId changed, update edges
-        let newEdges = state.edges
-        if (updates.parentId && updates.parentId !== exportNode.parentId) {
-          newEdges = state.edges.filter((e) => e.targetId !== id)
-          newEdges.push({
-            id: `${updates.parentId}-${id}`,
-            sourceId: updates.parentId,
-            targetId: id,
-          })
-        }
-
-        return {
-          nodes: { ...state.nodes, [id]: updatedExport },
-          edges: newEdges,
-        }
-      })
-    },
-
-    addDashboardNode: (dashboard) => {
-      set((state) => {
-        // Create edges from all parent sources to dashboard
-        const newEdges = [...state.edges]
-        for (const parentId of dashboard.parentIds) {
-          newEdges.push({
-            id: `${parentId}-${dashboard.id}`,
-            sourceId: parentId,
-            targetId: dashboard.id,
-          })
-        }
-
-        return {
-          nodes: { ...state.nodes, [dashboard.id]: dashboard },
-          edges: newEdges,
-          activeNodeId: dashboard.id,
-          selectedNodeId: dashboard.id,
-        }
-      })
-    },
-
-    updateDashboardNode: (id, updates) => {
-      set((state) => {
-        const node = state.nodes[id]
-        if (!node || node.type !== 'dashboard') return state
-
-        const dashboard = node as DashboardNode
-        const updatedDashboard = { ...dashboard, ...updates } as DashboardNode
-
-        // If parentIds changed, update edges
-        let newEdges = state.edges
-        if (updates.parentIds) {
-          newEdges = state.edges.filter((e) => e.targetId !== id)
-          for (const parentId of updates.parentIds) {
-            newEdges.push({
-              id: `${parentId}-${id}`,
-              sourceId: parentId,
-              targetId: id,
-            })
-          }
-        }
-
-        return {
-          nodes: { ...state.nodes, [id]: updatedDashboard },
-          edges: newEdges,
-        }
-      })
-    },
-
-    // ----------------------------------------
-    // Python Node Management
-    // ----------------------------------------
-
-    addPythonNode: (pythonNode) => {
-      set((state) => {
-        // Create edge from parent to python node
-        const newEdge: PipelineEdge = {
-          id: `${pythonNode.parentId}-${pythonNode.id}`,
-          sourceId: pythonNode.parentId,
-          targetId: pythonNode.id,
-        }
-
-        return {
-          nodes: { ...state.nodes, [pythonNode.id]: pythonNode },
-          edges: [...state.edges, newEdge],
-          activeNodeId: pythonNode.id,
-          selectedNodeId: pythonNode.id,
-        }
-      })
-    },
-
-    removePythonNode: (id) => {
-      const state = get()
-      const node = state.nodes[id]
-      if (!node || node.type !== 'python') return []
-
-      // Python nodes can have descendants (they produce data)
-      const descendants = getDescendants(id, state.edges)
-      const allToRemove = [id, ...descendants]
-
-      set((state) => {
-        const newNodes = { ...state.nodes }
-        for (const nodeId of allToRemove) {
-          delete newNodes[nodeId]
-        }
-
-        const removeSet = new Set(allToRemove)
-        const newEdges = state.edges.filter((e) => !removeSet.has(e.sourceId) && !removeSet.has(e.targetId))
-        const newOpenIds = state.openNodeIds.filter((nid) => !removeSet.has(nid))
-        const newActiveId =
-          state.activeNodeId && removeSet.has(state.activeNodeId)
-            ? (newOpenIds[newOpenIds.length - 1] ?? null)
-            : state.activeNodeId
-
-        return {
-          nodes: newNodes,
-          edges: newEdges,
-          openNodeIds: newOpenIds,
-          activeNodeId: newActiveId,
-          selectedNodeId: removeSet.has(state.selectedNodeId ?? '') ? null : state.selectedNodeId,
-        }
-      })
-
-      return allToRemove
-    },
-
-    updatePythonNode: (id, updates) => {
-      set((state) => {
-        const node = state.nodes[id]
-        if (!node || node.type !== 'python') return state
-
-        const pythonNode = node as PythonNode
-        const updatedPythonNode = { ...pythonNode, ...updates } as PythonNode
-
-        // If parentId changed, update edges
-        let newEdges = state.edges
-        if (updates.parentId && updates.parentId !== pythonNode.parentId) {
-          newEdges = state.edges.filter((e) => e.targetId !== id)
-          newEdges.push({
-            id: `${updates.parentId}-${id}`,
-            sourceId: updates.parentId,
-            targetId: id,
-          })
-        }
-
-        return {
-          nodes: { ...state.nodes, [id]: updatedPythonNode },
-          edges: newEdges,
-        }
-      })
-    },
-
-    // ----------------------------------------
-    // Node ViewOperations
-    // ----------------------------------------
-
-    updateNodePosition: (id, position) => {
-      set((state) => {
-        const node = state.nodes[id]
-        if (!node) return state
-        return {
-          nodes: {
-            ...state.nodes,
-            [id]: { ...node, position },
-          },
-        }
-      })
-    },
-
-    updateNodeName: (id, name) => {
-      set((state) => {
-        const node = state.nodes[id]
-        if (!node) return state
-        return {
-          nodes: {
-            ...state.nodes,
-            [id]: { ...node, name },
-          },
-        }
-      })
-    },
-
-    updateNodeRowCount: (id, rowCount) => {
-      set((state) => {
-        const node = state.nodes[id]
-        if (!node) return state
-        return {
-          nodes: {
-            ...state.nodes,
-            [id]: { ...node, rowCount },
-          },
-        }
-      })
-    },
-
-    updateNode: (id, updates) => {
-      set((state) => {
-        const node = state.nodes[id]
-        if (!node) return state
-        return {
-          nodes: {
-            ...state.nodes,
-            [id]: { ...node, ...updates } as PipelineNode,
-          },
-        }
-      })
-    },
-
-    updateNodes: (updates) => {
-      set((state) => {
-        const newNodes = { ...state.nodes }
-        for (const [id, patch] of Object.entries(updates)) {
-          const node = newNodes[id]
-          if (node) {
-            newNodes[id] = { ...node, ...patch } as PipelineNode
-          }
-        }
-        return { nodes: newNodes }
-      })
-    },
-
-    toggleNodeExpanded: (id) => {
-      set((state) => {
-        const node = state.nodes[id]
-        if (!node) return state
-        return {
-          nodes: {
-            ...state.nodes,
-            [id]: { ...node, isExpanded: !node.isExpanded } as PipelineNode,
-          },
-        }
-      })
-    },
-
-    // ----------------------------------------
-    // Selection
-    // ----------------------------------------
-
-    selectNode: (id) => set({ selectedNodeId: id }),
-
-    setActiveNode: (id) =>
-      set((state) => ({
-        activeNodeId: id,
-        nodeViewTimes: id ? { ...state.nodeViewTimes, [id]: Date.now() } : state.nodeViewTimes,
-      })),
-
-    // ----------------------------------------
-    // Tab Management
-    // ----------------------------------------
-
-    openTab: (id) =>
-      set((state) => ({
-        openNodeIds: state.openNodeIds.includes(id) ? state.openNodeIds : [...state.openNodeIds, id],
-        activeNodeId: id,
-        nodeViewTimes: { ...state.nodeViewTimes, [id]: Date.now() },
-      })),
-
-    closeTab: (id) =>
-      set((state) => {
-        const newOpenIds = state.openNodeIds.filter((nid) => nid !== id)
-        // If closing active tab, switch to last open tab or null
-        const newActiveId = state.activeNodeId === id ? (newOpenIds[newOpenIds.length - 1] ?? null) : state.activeNodeId
-        return {
-          openNodeIds: newOpenIds,
-          activeNodeId: newActiveId,
-        }
-      }),
-
-    replaceActiveTab: (oldId, newId) =>
-      set((state) => {
-        const idx = state.openNodeIds.indexOf(oldId)
-        if (idx === -1) {
-          // Old tab not open, just open new one
-          return {
-            openNodeIds: [...state.openNodeIds, newId],
-            activeNodeId: newId,
-          }
-        }
-        // Replace in place
-        const newOpenIds = [...state.openNodeIds]
-        newOpenIds[idx] = newId
-        return {
-          openNodeIds: newOpenIds,
-          activeNodeId: newId,
-        }
-      }),
-
-    // ----------------------------------------
-    // Cascade Delete
-    // ----------------------------------------
-
-    cascadeDelete: (nodeId) => {
-      const state = get()
-      const node = state.nodes[nodeId]
-
-      if (!node) return []
-
-      if (node.type === 'dataset') {
-        return get().removeDataset(nodeId)
-      } else if (node.type === 'chart' || node.type === 'export' || node.type === 'dashboard') {
-        return get().removeTerminalNode(nodeId)
-      } else if (node.type === 'python') {
-        return get().removePythonNode(nodeId)
-      } else {
-        return get().removeView(nodeId)
-      }
-    },
-
-    // ----------------------------------------
-    // Undo/Redo (snapshot-based with Immer patches)
-    // ----------------------------------------
-
-    captureSnapshot: () => {
-      const state = get()
-      return {
-        nodes: structuredClone(state.nodes),
-        edges: structuredClone(state.edges),
-        activeNodeId: state.activeNodeId,
-        selectedNodeId: state.selectedNodeId,
-        openNodeIds: [...state.openNodeIds],
-        timestamp: Date.now(),
-      }
-    },
-
-    captureLightSnapshot: () => {
-      const state = get()
-      return {
-        activeNodeId: state.activeNodeId,
-        selectedNodeId: state.selectedNodeId,
-        openNodeIds: [...state.openNodeIds],
-        timestamp: Date.now(),
-      }
-    },
-
-    pushUndo: (snapshot) =>
-      set((state) => {
-        // Enforce stack size limit
-        const newStack = [...state.undoStack, snapshot]
-        if (newStack.length > MAX_UNDO_STACK_SIZE) {
-          newStack.shift() // Remove oldest
-        }
-        return { undoStack: newStack }
-      }),
-
-    popUndo: () => {
-      const state = get()
-      if (state.undoStack.length === 0) return undefined
-      const snapshot = state.undoStack[state.undoStack.length - 1]
-      set({ undoStack: state.undoStack.slice(0, -1) })
-      return snapshot
-    },
-
-    pushRedo: (snapshot) =>
-      set((state) => {
-        // Enforce stack size limit
-        const newStack = [...state.redoStack, snapshot]
-        if (newStack.length > MAX_UNDO_STACK_SIZE) {
-          newStack.shift() // Remove oldest
-        }
-        return { redoStack: newStack }
-      }),
-
-    popRedo: () => {
-      const state = get()
-      if (state.redoStack.length === 0) return undefined
-      const snapshot = state.redoStack[state.redoStack.length - 1]
-      set({ redoStack: state.redoStack.slice(0, -1) })
-      return snapshot
-    },
-
-    clearRedo: () => set({ redoStack: [] }),
-
-    pushUndoAndClearRedo: (snapshot) =>
-      set((state) => ({
-        undoStack: [...state.undoStack, snapshot].slice(-MAX_UNDO_STACK_SIZE),
-        redoStack: [],
-      })),
-
-    restoreSnapshot: (snapshot) => {
-      // If snapshot has inverse patches, apply them instead of replacing state
-      if (snapshot.inversePatches && snapshot.inversePatches.length > 0) {
-        const state = get()
-        const newNodes = applyPatches(
-          state.nodes,
-          snapshot.inversePatches.filter((p) => p.path[0] === 'nodes')
-        )
-        const newEdges = applyPatches(
-          state.edges,
-          snapshot.inversePatches.filter((p) => p.path[0] === 'edges')
-        )
-        set({
-          nodes: newNodes,
-          edges: newEdges,
-          activeNodeId: snapshot.activeNodeId,
-          selectedNodeId: snapshot.selectedNodeId,
-          openNodeIds: snapshot.openNodeIds,
-        })
-      } else {
-        // Fall back to full state replacement
-        set({
-          nodes: snapshot.nodes,
-          edges: snapshot.edges,
-          activeNodeId: snapshot.activeNodeId,
-          selectedNodeId: snapshot.selectedNodeId,
-          openNodeIds: snapshot.openNodeIds,
-        })
-      }
-    },
-
-    mutateWithPatches: (
-      mutator: (draft: { nodes: Record<string, PipelineNode>; edges: PipelineEdge[] }) => void
-    ): { result: { nodes: Record<string, PipelineNode>; edges: PipelineEdge[] }; snapshot: PipelineSnapshot } => {
-      const state = get()
-      const currentState = { nodes: state.nodes, edges: state.edges }
-
-      // Use Immer's produceWithPatches to get both the new state and the patches
-      const [nextState, patches, inversePatches] = produceWithPatches(currentState, mutator)
-
-      // Create a lightweight snapshot with patches instead of full state clone
-      const snapshot: PipelineSnapshot = {
-        // Store current state for fallback compatibility
+      const engineState: CorePipelineState = {
         nodes: state.nodes,
         edges: state.edges,
         activeNodeId: state.activeNodeId,
         selectedNodeId: state.selectedNodeId,
-        openNodeIds: [...state.openNodeIds],
-        timestamp: Date.now(),
-        // Store patches for efficient undo
-        patches,
-        inversePatches,
+        openNodeIds: state.openNodeIds,
+        undoStack: state.undoStack,
+        redoStack: state.redoStack,
       }
 
-      // Apply the new state
+      const { state: newState } = PipelineEngine.execute(engineState, command)
+
       set({
-        nodes: nextState.nodes,
-        edges: nextState.edges,
+        nodes: newState.nodes,
+        edges: newState.edges,
+        activeNodeId: newState.activeNodeId,
+        selectedNodeId: newState.selectedNodeId,
+        openNodeIds: newState.openNodeIds,
+        undoStack: newState.undoStack,
+        redoStack: newState.redoStack,
       })
+    }
 
-      return { result: nextState, snapshot }
-    },
+    const splitNodeUpdates = (
+      updates: Partial<PipelineNode> & Partial<NodeRuntime> & Partial<NodeLayout>
+    ): {
+      domainUpdates: Partial<PipelineNode>
+      runtimeUpdates: Partial<NodeRuntime>
+      layoutUpdates: Partial<NodeLayout>
+      parentIds: string[] | null
+    } => {
+      const runtimeKeys = new Set<keyof NodeRuntime>([
+        'tableName',
+        'viewSql',
+        'outputTableName',
+        'columns',
+        'rowCount',
+        'matplotlibOutput',
+        'executionTimeMs',
+        'lastExecutedAt',
+      ])
+      const layoutKeys = new Set<keyof NodeLayout>(['position', 'isExpanded', 'dimensions'])
 
-    // ----------------------------------------
-    // State Management
-    // ----------------------------------------
+      const domainUpdates: Partial<PipelineNode> = {}
+      const runtimeUpdates: Partial<NodeRuntime> = {}
+      const layoutUpdates: Partial<NodeLayout> = {}
+      let parentIds: string[] | null = null
 
-    setLoading: (loading) => set({ loading }),
-    setError: (error) => set({ error }),
-    setSuccessMessage: (successMessage) => set({ successMessage }),
-    reset: () => set(initialState),
-
-    // ----------------------------------------
-    // Mode Management (State Machine)
-    // ----------------------------------------
-
-    setMode: (mode) => set({ mode, ...deriveFromMode(mode) }),
-
-    enterRestorationMode: (state) => {
-      const mode: PipelineMode = { type: 'restoring', state }
-      set({ mode, ...deriveFromMode(mode) })
-    },
-
-    exitRestorationMode: () => {
-      const mode: PipelineMode = { type: 'normal' }
-      set({ mode, ...deriveFromMode(mode) })
-    },
-
-    enterBranchingMode: (viewId, snapshotBefore, pendingOperation) => {
-      const mode: PipelineMode = { type: 'branching', viewId, snapshotBefore, pendingOperation }
-      set({ mode, ...deriveFromMode(mode) })
-    },
-
-    exitBranchingMode: () => {
-      const mode: PipelineMode = { type: 'normal' }
-      set({ mode, ...deriveFromMode(mode) })
-    },
-
-    enterLoadingMode: (data, providedFiles) => {
-      const mode: PipelineMode = { type: 'loading', data, providedFiles }
-      set({ mode, ...deriveFromMode(mode) })
-    },
-
-    exitLoadingMode: () => {
-      const mode: PipelineMode = { type: 'normal' }
-      set({ mode, ...deriveFromMode(mode) })
-    },
-
-    updateDatasetRestoration: (nodeId, update) =>
-      set((state) => {
-        if (state.mode.type !== 'restoring') return state
-        const datasets = new Map(state.mode.state.datasets)
-        const existing = datasets.get(nodeId)
-        if (!existing) return state
-        datasets.set(nodeId, { ...existing, ...update })
-        const newMode: PipelineMode = {
-          type: 'restoring',
-          state: {
-            ...state.mode.state,
-            datasets,
-          },
+      for (const [key, value] of Object.entries(updates)) {
+        if (key === 'parentIds') {
+          parentIds = Array.isArray(value) ? (value as string[]) : []
+          continue
         }
-        return { mode: newMode, ...deriveFromMode(newMode) }
-      }),
-
-    skipDataset: (nodeId) =>
-      set((state) => {
-        if (state.mode.type !== 'restoring') return state
-        const skippedDatasets = new Set(state.mode.state.skippedDatasets)
-        skippedDatasets.add(nodeId)
-        const newMode: PipelineMode = {
-          type: 'restoring',
-          state: {
-            ...state.mode.state,
-            skippedDatasets,
-          },
+        if (key === 'parentId') {
+          parentIds = value ? [value as string] : []
+          continue
         }
-        return { mode: newMode, ...deriveFromMode(newMode) }
-      }),
-
-    unskipDataset: (nodeId) =>
-      set((state) => {
-        if (state.mode.type !== 'restoring') return state
-        const skippedDatasets = new Set(state.mode.state.skippedDatasets)
-        skippedDatasets.delete(nodeId)
-        const newMode: PipelineMode = {
-          type: 'restoring',
-          state: {
-            ...state.mode.state,
-            skippedDatasets,
-          },
+        if (runtimeKeys.has(key as keyof NodeRuntime)) {
+          ;(runtimeUpdates as Record<string, unknown>)[key] = value
+          continue
         }
-        return { mode: newMode, ...deriveFromMode(newMode) }
-      }),
-
-    bumpDataVersion: () => set((state) => ({ dataVersion: state.dataVersion + 1 })),
-
-    // ----------------------------------------
-    // Session ID Management
-    // ----------------------------------------
-
-    setCurrentSessionId: (id) => set({ currentSessionId: id }),
-    generateNewSessionId: () => {
-      const id = generateId('session', 6)
-      set({ currentSessionId: id })
-      return id
-    },
-
-    // ----------------------------------------
-    // Duplicate Branch
-    // ----------------------------------------
-
-    duplicateBranch: (nodeId) => {
-      const state = get()
-      const node = state.nodes[nodeId]
-      if (!node) return null
-
-      // Get all descendants
-      const descendants = getDescendants(nodeId, state.edges)
-      const allNodeIds = [nodeId, ...descendants]
-
-      // Create ID mapping: old ID -> new ID
-      const idMap: Record<string, string> = {}
-      for (const id of allNodeIds) {
-        const suffix = generateShortId()
-        idMap[id] = `${id}_copy_${suffix}`
+        if (layoutKeys.has(key as keyof NodeLayout)) {
+          ;(layoutUpdates as Record<string, unknown>)[key] = value
+          continue
+        }
+        ;(domainUpdates as Record<string, unknown>)[key] = value
       }
 
-      // Clone all nodes
-      const newNodes: Record<string, PipelineNode> = {}
-      for (const id of allNodeIds) {
-        const original = state.nodes[id]
-        if (!original) continue
+      return { domainUpdates, runtimeUpdates, layoutUpdates, parentIds }
+    }
 
-        const newId = idMap[id]
-        const baseClone = {
-          ...original,
-          id: newId,
-          name: id === nodeId ? `${original.name} (copy)` : original.name,
-          tableName: `${original.tableName}_copy_${newId.slice(-4)}`,
-          position: {
-            x: original.position.x + 300,
-            y: original.position.y + 50,
-          },
-          createdAt: new Date(),
+    return {
+      ...initialState,
+
+      // ----------------------------------------
+      // Dataset Management
+      // ----------------------------------------
+
+      addDataset: (dataset, runtime, layout) => {
+        applyEngineCommand({ type: 'addDataset', dataset, suppressEffects: true })
+        usePipelineRuntimeStore.getState().setNodeRuntime(dataset.id, runtime)
+        usePipelineLayoutStore.getState().setNodeLayout(dataset.id, layout)
+      },
+
+      removeDataset: (id) => {
+        const state = get()
+        const descendants = getDescendants(id, state.edges)
+        const allToRemove = [id, ...descendants]
+        applyEngineCommand({ type: 'removeNode', nodeId: id, cascade: true, suppressEffects: true })
+        usePipelineRuntimeStore.getState().removeNodesRuntime(allToRemove)
+        usePipelineLayoutStore.getState().removeNodesLayout(allToRemove)
+
+        return descendants // Return view IDs that need DuckDB cleanup
+      },
+
+      // ----------------------------------------
+      // View Management
+      // ----------------------------------------
+
+      addView: (view, parentIds, runtime, layout) => {
+        applyEngineCommand({ type: 'addView', view, parentIds, suppressEffects: true })
+        usePipelineRuntimeStore.getState().setNodeRuntime(view.id, runtime)
+        usePipelineLayoutStore.getState().setNodeLayout(view.id, layout)
+      },
+
+      removeView: (id) => {
+        const state = get()
+        const node = state.nodes[id]
+        if (!node || node.type !== 'view') return []
+
+        const descendants = getDescendants(id, state.edges)
+        const allToRemove = [id, ...descendants]
+
+        applyEngineCommand({ type: 'removeNode', nodeId: id, cascade: true, suppressEffects: true })
+        usePipelineRuntimeStore.getState().removeNodesRuntime(allToRemove)
+        usePipelineLayoutStore.getState().removeNodesLayout(allToRemove)
+
+        return allToRemove // Return all view IDs for DuckDB cleanup
+      },
+
+      updateView: (id, updates) => {
+        get().updateNode(id, updates)
+      },
+
+      // ----------------------------------------
+      // Chart/Export Management (terminal nodes)
+      // ----------------------------------------
+
+      addChartNode: (chart, parentId, runtime, layout) => {
+        applyEngineCommand({ type: 'addChartNode', chart, parentId })
+        usePipelineRuntimeStore.getState().setNodeRuntime(chart.id, runtime)
+        usePipelineLayoutStore.getState().setNodeLayout(chart.id, layout)
+      },
+
+      addExportNode: (exportNode, parentId, runtime, layout) => {
+        applyEngineCommand({ type: 'addExportNode', exportNode, parentId })
+        usePipelineRuntimeStore.getState().setNodeRuntime(exportNode.id, runtime)
+        usePipelineLayoutStore.getState().setNodeLayout(exportNode.id, layout)
+      },
+
+      removeTerminalNode: (id) => {
+        const state = get()
+        const node = state.nodes[id]
+        if (!node || (node.type !== 'chart' && node.type !== 'export' && node.type !== 'dashboard')) return []
+
+        // Terminal nodes have no descendants, just remove the node
+        applyEngineCommand({ type: 'removeNode', nodeId: id, cascade: false, suppressEffects: true })
+        usePipelineRuntimeStore.getState().removeNodesRuntime([id])
+        usePipelineLayoutStore.getState().removeNodesLayout([id])
+
+        return [id]
+      },
+
+      updateChartNode: (id, updates) => {
+        const node = get().nodes[id]
+        if (!node || node.type !== 'chart') return
+        get().updateNode(id, updates)
+      },
+
+      updateExportNode: (id, updates) => {
+        const node = get().nodes[id]
+        if (!node || node.type !== 'export') return
+        get().updateNode(id, updates)
+      },
+
+      addDashboardNode: (dashboard, parentIds, layout) => {
+        applyEngineCommand({ type: 'addDashboardNode', dashboard, parentIds, suppressEffects: true })
+        usePipelineLayoutStore.getState().setNodeLayout(dashboard.id, layout)
+      },
+
+      updateDashboardNode: (id, updates) => {
+        const node = get().nodes[id]
+        if (!node || node.type !== 'dashboard') return
+        get().updateNode(id, updates)
+      },
+
+      // ----------------------------------------
+      // Python Node Management
+      // ----------------------------------------
+
+      addPythonNode: (pythonNode, parentId, runtime, layout) => {
+        applyEngineCommand({ type: 'addPythonNode', pythonNode, parentId })
+        usePipelineRuntimeStore.getState().setNodeRuntime(pythonNode.id, runtime)
+        usePipelineLayoutStore.getState().setNodeLayout(pythonNode.id, layout)
+      },
+
+      removePythonNode: (id) => {
+        const state = get()
+        const node = state.nodes[id]
+        if (!node || node.type !== 'python') return []
+
+        // Python nodes can have descendants (they produce data)
+        const descendants = getDescendants(id, state.edges)
+        const allToRemove = [id, ...descendants]
+
+        applyEngineCommand({ type: 'removeNode', nodeId: id, cascade: true, suppressEffects: true })
+        usePipelineRuntimeStore.getState().removeNodesRuntime(allToRemove)
+        usePipelineLayoutStore.getState().removeNodesLayout(allToRemove)
+
+        return allToRemove
+      },
+
+      updatePythonNode: (id, updates) => {
+        const node = get().nodes[id]
+        if (!node || node.type !== 'python') return
+        get().updateNode(id, updates)
+      },
+
+      // ----------------------------------------
+      // Node ViewOperations
+      // ----------------------------------------
+
+      updateNodePosition: (id, position) => {
+        usePipelineLayoutStore.getState().setNodePosition(id, position)
+      },
+
+      updateNodeName: (id, name) => {
+        applyEngineCommand({ type: 'updateNode', nodeId: id, updates: { name }, suppressEffects: true })
+      },
+
+      updateNodeRowCount: (id, rowCount) => {
+        usePipelineRuntimeStore.getState().setNodeRuntime(id, { rowCount })
+      },
+
+      updateNode: (id, updates) => {
+        const { domainUpdates, runtimeUpdates, layoutUpdates, parentIds } = splitNodeUpdates(updates)
+        if (Object.keys(domainUpdates).length > 0) {
+          applyEngineCommand({ type: 'updateNode', nodeId: id, updates: domainUpdates, suppressEffects: true })
         }
-
-        if (original.type === 'view') {
-          const view = original as DataView
-          newNodes[newId] = {
-            ...baseClone,
-            type: 'view',
-            parentIds: view.parentIds.map((pid) => idMap[pid] || pid),
-            operation: { ...view.operation },
-            viewSql: '', // Will need to be regenerated by the caller
-          } as DataView
-        } else if (original.type === 'chart') {
-          const chart = original as ChartNode
-          newNodes[newId] = {
-            ...baseClone,
-            type: 'chart',
-            parentId: idMap[chart.parentId] || chart.parentId,
-            config: { ...chart.config },
-          } as ChartNode
-        } else if (original.type === 'export') {
-          const exportNode = original as ExportNode
-          newNodes[newId] = {
-            ...baseClone,
-            type: 'export',
-            parentId: idMap[exportNode.parentId] || exportNode.parentId,
-            config: { ...exportNode.config },
-          } as ExportNode
-        } else if (original.type === 'dataset') {
-          // Datasets are root nodes - keep the original parent reference
-          newNodes[newId] = {
-            ...baseClone,
-            type: 'dataset',
-          } as Dataset
+        if (parentIds) {
+          applyEngineCommand({ type: 'setNodeParents', nodeId: id, parentIds, suppressEffects: true })
         }
-      }
+        if (Object.keys(runtimeUpdates).length > 0) {
+          usePipelineRuntimeStore.getState().setNodeRuntime(id, runtimeUpdates)
+        }
+        if (Object.keys(layoutUpdates).length > 0) {
+          usePipelineLayoutStore.getState().setNodeLayout(id, layoutUpdates as NodeLayout)
+        }
+      },
 
-      // Create new edges for the cloned subgraph
-      const newEdges: PipelineEdge[] = []
-      for (const edge of state.edges) {
-        // Only clone edges within the duplicated subgraph
-        if (allNodeIds.includes(edge.sourceId) && allNodeIds.includes(edge.targetId)) {
-          newEdges.push({
-            id: `${idMap[edge.sourceId]}-${idMap[edge.targetId]}`,
-            sourceId: idMap[edge.sourceId],
-            targetId: idMap[edge.targetId],
+      updateNodes: (updates) => {
+        for (const [nodeId, patch] of Object.entries(updates)) {
+          get().updateNode(nodeId, patch)
+        }
+      },
+
+      toggleNodeExpanded: (id) => {
+        usePipelineLayoutStore.getState().toggleNodeExpanded(id)
+      },
+
+      setNodeParents: (id, parentIds) => {
+        applyEngineCommand({ type: 'setNodeParents', nodeId: id, parentIds, suppressEffects: true })
+      },
+
+      // ----------------------------------------
+      // Selection
+      // ----------------------------------------
+
+      selectNode: (id) => set({ selectedNodeId: id }),
+
+      setActiveNode: (id) => {
+        set({ activeNodeId: id })
+        usePipelineUiStore.getState().markNodeViewed(id)
+      },
+
+      // ----------------------------------------
+      // Tab Management
+      // ----------------------------------------
+
+      openTab: (id) => {
+        set((state) => ({
+          openNodeIds: state.openNodeIds.includes(id) ? state.openNodeIds : [...state.openNodeIds, id],
+          activeNodeId: id,
+        }))
+        usePipelineUiStore.getState().markNodeViewed(id)
+      },
+
+      closeTab: (id) =>
+        set((state) => {
+          const newOpenIds = state.openNodeIds.filter((nid) => nid !== id)
+          // If closing active tab, switch to last open tab or null
+          const newActiveId =
+            state.activeNodeId === id ? (newOpenIds[newOpenIds.length - 1] ?? null) : state.activeNodeId
+          return {
+            openNodeIds: newOpenIds,
+            activeNodeId: newActiveId,
+          }
+        }),
+
+      replaceActiveTab: (oldId, newId) => {
+        set((state) => {
+          const idx = state.openNodeIds.indexOf(oldId)
+          if (idx === -1) {
+            // Old tab not open, just open new one
+            return {
+              openNodeIds: [...state.openNodeIds, newId],
+              activeNodeId: newId,
+            }
+          }
+          // Replace in place
+          const newOpenIds = [...state.openNodeIds]
+          newOpenIds[idx] = newId
+          return {
+            openNodeIds: newOpenIds,
+            activeNodeId: newId,
+          }
+        })
+        usePipelineUiStore.getState().markNodeViewed(newId)
+      },
+
+      // ----------------------------------------
+      // Cascade Delete
+      // ----------------------------------------
+
+      cascadeDelete: (nodeId) => {
+        const state = get()
+        const node = state.nodes[nodeId]
+
+        if (!node) return []
+
+        if (node.type === 'dataset') {
+          return get().removeDataset(nodeId)
+        } else if (node.type === 'chart' || node.type === 'export' || node.type === 'dashboard') {
+          return get().removeTerminalNode(nodeId)
+        } else if (node.type === 'python') {
+          return get().removePythonNode(nodeId)
+        } else {
+          return get().removeView(nodeId)
+        }
+      },
+
+      // ----------------------------------------
+      // Undo/Redo (snapshot-based with Immer patches)
+      // ----------------------------------------
+
+      captureSnapshot: () => {
+        const state = get()
+        return {
+          nodes: structuredClone(state.nodes),
+          edges: structuredClone(state.edges),
+          activeNodeId: state.activeNodeId,
+          selectedNodeId: state.selectedNodeId,
+          openNodeIds: [...state.openNodeIds],
+          timestamp: Date.now(),
+        }
+      },
+
+      captureLightSnapshot: () => {
+        const state = get()
+        return {
+          activeNodeId: state.activeNodeId,
+          selectedNodeId: state.selectedNodeId,
+          openNodeIds: [...state.openNodeIds],
+          timestamp: Date.now(),
+        }
+      },
+
+      pushUndo: (snapshot) =>
+        set((state) => {
+          // Enforce stack size limit
+          const newStack = [...state.undoStack, snapshot]
+          if (newStack.length > MAX_UNDO_STACK_SIZE) {
+            newStack.shift() // Remove oldest
+          }
+          return { undoStack: newStack }
+        }),
+
+      popUndo: () => {
+        const state = get()
+        if (state.undoStack.length === 0) return undefined
+        const snapshot = state.undoStack[state.undoStack.length - 1]
+        set({ undoStack: state.undoStack.slice(0, -1) })
+        return snapshot
+      },
+
+      pushRedo: (snapshot) =>
+        set((state) => {
+          // Enforce stack size limit
+          const newStack = [...state.redoStack, snapshot]
+          if (newStack.length > MAX_UNDO_STACK_SIZE) {
+            newStack.shift() // Remove oldest
+          }
+          return { redoStack: newStack }
+        }),
+
+      popRedo: () => {
+        const state = get()
+        if (state.redoStack.length === 0) return undefined
+        const snapshot = state.redoStack[state.redoStack.length - 1]
+        set({ redoStack: state.redoStack.slice(0, -1) })
+        return snapshot
+      },
+
+      clearRedo: () => set({ redoStack: [] }),
+
+      pushUndoAndClearRedo: (snapshot) =>
+        set((state) => ({
+          undoStack: [...state.undoStack, snapshot].slice(-MAX_UNDO_STACK_SIZE),
+          redoStack: [],
+        })),
+
+      restoreSnapshot: (snapshot) => {
+        // If snapshot has inverse patches, apply them instead of replacing state
+        if (snapshot.inversePatches && snapshot.inversePatches.length > 0) {
+          const state = get()
+          const newNodes = applyPatches(
+            state.nodes,
+            snapshot.inversePatches.filter((p) => p.path[0] === 'nodes')
+          )
+          const newEdges = applyPatches(
+            state.edges,
+            snapshot.inversePatches.filter((p) => p.path[0] === 'edges')
+          )
+          set({
+            nodes: newNodes,
+            edges: newEdges,
+            activeNodeId: snapshot.activeNodeId,
+            selectedNodeId: snapshot.selectedNodeId,
+            openNodeIds: snapshot.openNodeIds,
+          })
+        } else {
+          // Fall back to full state replacement
+          set({
+            nodes: snapshot.nodes,
+            edges: snapshot.edges,
+            activeNodeId: snapshot.activeNodeId,
+            selectedNodeId: snapshot.selectedNodeId,
+            openNodeIds: snapshot.openNodeIds,
           })
         }
-      }
+      },
 
-      // Update state
-      set((state) => ({
-        nodes: { ...state.nodes, ...newNodes },
-        edges: [...state.edges, ...newEdges],
-        selectedNodeId: idMap[nodeId],
-      }))
+      mutateWithPatches: (
+        mutator: (draft: { nodes: Record<string, PipelineNode>; edges: PipelineEdge[] }) => void
+      ): { result: { nodes: Record<string, PipelineNode>; edges: PipelineEdge[] }; snapshot: PipelineSnapshot } => {
+        const state = get()
+        const currentState = { nodes: state.nodes, edges: state.edges }
 
-      return { newRootId: idMap[nodeId], idMap }
-    },
+        // Use Immer's produceWithPatches to get both the new state and the patches
+        const [nextState, patches, inversePatches] = produceWithPatches(currentState, mutator)
 
-    // ----------------------------------------
-    // Computed Getters
-    // ----------------------------------------
-
-    getNode: (id) => get().nodes[id],
-
-    getNodeChildren: (id) => getChildren(id, get().edges),
-
-    getNodeParents: (id) => getParents(id, get().edges),
-
-    getNodeDescendants: (id) => getDescendants(id, get().edges),
-
-    getAllRootNodes: () => getRootNodes(get().nodes, get().edges),
-
-    getDatasets: () => Object.values(get().nodes).filter((n): n is Dataset => n.type === 'dataset'),
-
-    getViews: () => Object.values(get().nodes).filter((n): n is DataView => n.type === 'view'),
-
-    getChartNodes: () => Object.values(get().nodes).filter((n): n is ChartNode => n.type === 'chart'),
-
-    getExportNodes: () => Object.values(get().nodes).filter((n): n is ExportNode => n.type === 'export'),
-
-    getPythonNodes: () => Object.values(get().nodes).filter((n): n is PythonNode => n.type === 'python'),
-
-    // ----------------------------------------
-    // Cloud Sync
-    // ----------------------------------------
-
-    setRemoteState: ({ nodes, edges }) => {
-      // Full replacement of state from remote (used on initial sync)
-      set({
-        nodes,
-        edges,
-        // Reset selection if nodes are completely different
-        activeNodeId: null,
-        selectedNodeId: null,
-        openNodeIds: [],
-      })
-    },
-
-    mergeRemoteState: ({ nodes: remoteNodes, edges: remoteEdges }) => {
-      // Merge remote changes into local state (remote wins for conflicts)
-      set((state) => {
-        const newNodes = { ...state.nodes }
-
-        // Add/update nodes from remote
-        for (const [id, node] of Object.entries(remoteNodes)) {
-          newNodes[id] = node
+        // Create a lightweight snapshot with patches instead of full state clone
+        const snapshot: PipelineSnapshot = {
+          // Store current state for fallback compatibility
+          nodes: state.nodes,
+          edges: state.edges,
+          activeNodeId: state.activeNodeId,
+          selectedNodeId: state.selectedNodeId,
+          openNodeIds: [...state.openNodeIds],
+          timestamp: Date.now(),
+          // Store patches for efficient undo
+          patches,
+          inversePatches,
         }
 
-        // Remove nodes that exist locally but not remotely
-        for (const id of Object.keys(state.nodes)) {
-          if (!(id in remoteNodes)) {
-            delete newNodes[id]
+        // Apply the new state
+        set({
+          nodes: nextState.nodes,
+          edges: nextState.edges,
+        })
+
+        return { result: nextState, snapshot }
+      },
+
+      // ----------------------------------------
+      // State Management
+      // ----------------------------------------
+
+      reset: () => {
+        set(initialState)
+        usePipelineRuntimeStore.getState().reset()
+        usePipelineLayoutStore.getState().reset()
+      },
+
+      // ----------------------------------------
+      // Duplicate Branch
+      // ----------------------------------------
+
+      duplicateBranch: (nodeId) => {
+        const state = get()
+        const node = state.nodes[nodeId]
+        if (!node) return null
+
+        // Get all descendants
+        const descendants = getDescendants(nodeId, state.edges)
+        const allNodeIds = [nodeId, ...descendants]
+
+        // Create ID mapping: old ID -> new ID
+        const idMap: Record<string, string> = {}
+        for (const id of allNodeIds) {
+          const suffix = generateShortId()
+          idMap[id] = `${id}_copy_${suffix}`
+        }
+
+        const runtimeState = usePipelineRuntimeStore.getState().nodes
+        const layoutState = usePipelineLayoutStore.getState().nodes
+
+        // Clone all nodes
+        const newNodes: Record<string, PipelineNode> = {}
+        const newRuntime: Record<string, NodeRuntime> = {}
+        const newLayout: Record<string, NodeLayout> = {}
+
+        for (const id of allNodeIds) {
+          const original = state.nodes[id]
+          if (!original) continue
+
+          const newId = idMap[id]
+          const baseClone = {
+            ...original,
+            id: newId,
+            name: id === nodeId ? `${original.name} (copy)` : original.name,
+            createdAt: new Date(),
+          }
+
+          if (original.type === 'view') {
+            const view = original as DataView
+            newNodes[newId] = {
+              ...baseClone,
+              type: 'view',
+              operation: { ...view.operation },
+            } as DataView
+          } else if (original.type === 'chart') {
+            const chart = original as ChartNode
+            newNodes[newId] = {
+              ...baseClone,
+              type: 'chart',
+              config: { ...chart.config },
+            } as ChartNode
+          } else if (original.type === 'export') {
+            const exportNode = original as ExportNode
+            newNodes[newId] = {
+              ...baseClone,
+              type: 'export',
+              config: { ...exportNode.config },
+            } as ExportNode
+          } else if (original.type === 'dashboard') {
+            const dashboard = original as DashboardNode
+            newNodes[newId] = {
+              ...baseClone,
+              type: 'dashboard',
+              chartRefs: dashboard.chartRefs.map((ref) => idMap[ref] || ref),
+              config: { ...dashboard.config },
+            } as DashboardNode
+          } else if (original.type === 'python') {
+            const pythonNode = original as PythonNode
+            newNodes[newId] = {
+              ...baseClone,
+              type: 'python',
+              code: pythonNode.code,
+            } as PythonNode
+          } else if (original.type === 'dataset') {
+            newNodes[newId] = {
+              ...baseClone,
+              type: 'dataset',
+            } as Dataset
+          }
+
+          const originalRuntime = runtimeState[id]
+          if (originalRuntime) {
+            const runtimeClone: NodeRuntime = { ...originalRuntime }
+            if (runtimeClone.tableName) {
+              runtimeClone.tableName = `${runtimeClone.tableName}_copy_${newId.slice(-4)}`
+            }
+            if (runtimeClone.outputTableName) {
+              runtimeClone.outputTableName = `${runtimeClone.outputTableName}_copy_${newId.slice(-4)}`
+            }
+            if (original.type === 'view') {
+              runtimeClone.viewSql = ''
+            }
+            newRuntime[newId] = runtimeClone
+          }
+
+          const originalLayout = layoutState[id]
+          if (originalLayout) {
+            newLayout[newId] = {
+              ...originalLayout,
+              position: {
+                x: originalLayout.position.x + 300,
+                y: originalLayout.position.y + 50,
+              },
+            }
           }
         }
 
-        // Use remote edges (they're authoritative)
-        const newEdges = remoteEdges
-
-        // Update open tabs to only include nodes that still exist
-        const nodeIds = new Set(Object.keys(newNodes))
-        const newOpenIds = state.openNodeIds.filter((id) => nodeIds.has(id))
-
-        // Update active/selected if they no longer exist
-        const newActiveId = state.activeNodeId && nodeIds.has(state.activeNodeId) ? state.activeNodeId : null
-        const newSelectedId = state.selectedNodeId && nodeIds.has(state.selectedNodeId) ? state.selectedNodeId : null
-
-        return {
-          nodes: newNodes,
-          edges: newEdges,
-          openNodeIds: newOpenIds,
-          activeNodeId: newActiveId,
-          selectedNodeId: newSelectedId,
+        // Create new edges for the cloned subgraph
+        const newEdges: PipelineEdge[] = []
+        for (const edge of state.edges) {
+          // Only clone edges within the duplicated subgraph
+          if (allNodeIds.includes(edge.sourceId) && allNodeIds.includes(edge.targetId)) {
+            newEdges.push({
+              id: `${idMap[edge.sourceId]}-${idMap[edge.targetId]}`,
+              sourceId: idMap[edge.sourceId],
+              targetId: idMap[edge.targetId],
+            })
+          }
         }
-      })
-    },
-  }))
+
+        // Update state
+        set((state) => ({
+          nodes: { ...state.nodes, ...newNodes },
+          edges: [...state.edges, ...newEdges],
+          selectedNodeId: idMap[nodeId],
+        }))
+        usePipelineRuntimeStore.getState().setNodesRuntime(newRuntime)
+        usePipelineLayoutStore.getState().setNodesLayout(newLayout)
+
+        return { newRootId: idMap[nodeId], idMap }
+      },
+
+      // ----------------------------------------
+      // Computed Getters
+      // ----------------------------------------
+
+      getNode: (id) => get().nodes[id],
+
+      getHydratedNode: (id) => {
+        const state = get()
+        const runtime = usePipelineRuntimeStore.getState().nodes
+        const layout = usePipelineLayoutStore.getState().nodes
+        const node = state.nodes[id]
+        return node ? hydrateNode(node, state.edges, runtime, layout) : undefined
+      },
+
+      getHydratedNodes: () => {
+        const state = get()
+        const runtime = usePipelineRuntimeStore.getState().nodes
+        const layout = usePipelineLayoutStore.getState().nodes
+        return hydrateNodes(state.nodes, state.edges, runtime, layout)
+      },
+
+      getNodeChildren: (id) => getChildren(id, get().edges),
+
+      getNodeParents: (id) => getParents(id, get().edges),
+
+      getNodeDescendants: (id) => getDescendants(id, get().edges),
+
+      getAllRootNodes: () => getRootNodes(get().nodes, get().edges),
+
+      getDatasets: () => Object.values(get().nodes).filter((n): n is Dataset => n.type === 'dataset'),
+
+      getViews: () => Object.values(get().nodes).filter((n): n is DataView => n.type === 'view'),
+
+      getChartNodes: () => Object.values(get().nodes).filter((n): n is ChartNode => n.type === 'chart'),
+
+      getExportNodes: () => Object.values(get().nodes).filter((n): n is ExportNode => n.type === 'export'),
+
+      getPythonNodes: () => Object.values(get().nodes).filter((n): n is PythonNode => n.type === 'python'),
+
+      // ----------------------------------------
+      // Cloud Sync
+      // ----------------------------------------
+
+      setRemoteState: ({ nodes, edges }) => {
+        // Full replacement of state from remote (used on initial sync)
+        set({
+          nodes,
+          edges,
+          // Reset selection if nodes are completely different
+          activeNodeId: null,
+          selectedNodeId: null,
+          openNodeIds: [],
+        })
+        usePipelineRuntimeStore.getState().reset()
+        usePipelineLayoutStore.getState().reset()
+      },
+
+      mergeRemoteState: ({ nodes: remoteNodes, edges: remoteEdges }) => {
+        // Merge remote changes into local state (remote wins for conflicts)
+        set((state) => {
+          const newNodes = { ...state.nodes }
+
+          // Add/update nodes from remote
+          for (const [id, node] of Object.entries(remoteNodes)) {
+            newNodes[id] = node
+          }
+
+          // Remove nodes that exist locally but not remotely
+          for (const id of Object.keys(state.nodes)) {
+            if (!(id in remoteNodes)) {
+              delete newNodes[id]
+            }
+          }
+
+          // Use remote edges (they're authoritative)
+          const newEdges = remoteEdges
+
+          // Update open tabs to only include nodes that still exist
+          const nodeIds = new Set(Object.keys(newNodes))
+          const newOpenIds = state.openNodeIds.filter((id) => nodeIds.has(id))
+
+          // Update active/selected if they no longer exist
+          const newActiveId = state.activeNodeId && nodeIds.has(state.activeNodeId) ? state.activeNodeId : null
+          const newSelectedId = state.selectedNodeId && nodeIds.has(state.selectedNodeId) ? state.selectedNodeId : null
+
+          return {
+            nodes: newNodes,
+            edges: newEdges,
+            openNodeIds: newOpenIds,
+            activeNodeId: newActiveId,
+            selectedNodeId: newSelectedId,
+          }
+        })
+        const runtimeState = usePipelineRuntimeStore.getState()
+        const layoutState = usePipelineLayoutStore.getState()
+        const existingIds = new Set(Object.keys(remoteNodes))
+        runtimeState.removeNodesRuntime(Object.keys(runtimeState.nodes).filter((id) => !existingIds.has(id)))
+        layoutState.removeNodesLayout(Object.keys(layoutState.nodes).filter((id) => !existingIds.has(id)))
+      },
+    }
+  })
 )
 
 // ============================================

@@ -1,6 +1,7 @@
-import { Layers } from 'lucide-react'
+import Layers from 'lucide-react/dist/esm/icons/layers'
 import { escapeIdentifier } from '@/lib/duckdb/sql-builder/utils'
 import type { ToolDefinition } from '@/types/ai'
+import type { Column } from '@/types/dataset'
 import type { PipelineNode, UnionOperation } from '@/types/pipeline'
 import type { OperationContext, OperationPlugin, OperationUiMeta, ValidationResult } from '../types'
 
@@ -9,6 +10,7 @@ const ui: OperationUiMeta = {
   icon: Layers,
   color: 'orange',
   editable: true,
+  editor: { type: 'union' },
 }
 
 const toolDefinition: ToolDefinition = {
@@ -34,7 +36,7 @@ const toolDefinition: ToolDefinition = {
 
 function validate(
   args: Record<string, unknown>,
-  _columns: unknown,
+  columns: Column[],
   nodes?: Record<string, PipelineNode>
 ): ValidationResult {
   const errors: string[] = []
@@ -52,14 +54,48 @@ function validate(
     return { valid: false, errors, warnings }
   }
 
+  // Collect all nodes to union (including checking existence)
+  const nodesToUnion: PipelineNode[] = []
   for (const id of sourceIds) {
     if (!nodes?.[id]) {
       errors.push(`Table with ID "${id}" does not exist`)
+    } else {
+      nodesToUnion.push(nodes[id])
     }
   }
 
   if (errors.length > 0) {
     return { valid: false, errors, warnings }
+  }
+
+  // Check schema compatibility between current table and union sources
+  const currentColumnCount = columns.length
+  for (const node of nodesToUnion) {
+    const sourceColumnCount = node.columns.length
+
+    // Check column count mismatch
+    if (sourceColumnCount !== currentColumnCount) {
+      warnings.push(
+        `Schema mismatch: "${node.name}" has ${sourceColumnCount} columns, current table has ${currentColumnCount}. ` +
+          `Union may fail or produce unexpected results.`
+      )
+    } else {
+      // Check column type compatibility
+      for (let i = 0; i < currentColumnCount; i++) {
+        const currentCol = columns[i]
+        const sourceCol = node.columns[i]
+        if (currentCol && sourceCol) {
+          const currentType = currentCol.type.toLowerCase()
+          const sourceType = sourceCol.type.toLowerCase()
+          if (currentType !== sourceType) {
+            warnings.push(
+              `Type mismatch at position ${i + 1}: current "${currentCol.name}" (${currentCol.type}) vs ` +
+                `"${node.name}.${sourceCol.name}" (${sourceCol.type}). Types will be coerced.`
+            )
+          }
+        }
+      }
+    }
   }
 
   const operation: UnionOperation = {

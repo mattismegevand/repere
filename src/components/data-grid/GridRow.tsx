@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo } from 'react'
-import { selectIsRowInSelection, useGridSelectionStore } from '@/stores'
+import { selectIsRowInSelection, useGridSelectionStore } from '@/components/data-grid/stores'
 import { useColumnsContext, useColumnVirtualizationContext, useRowDataContext, useSelectionContext } from './context'
 import { GridCell } from './GridCell'
 

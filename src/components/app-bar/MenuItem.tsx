@@ -1,5 +1,5 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { Check } from 'lucide-react'
+import Check from 'lucide-react/dist/esm/icons/check'
 import { formatShortcut } from '@/lib/platform'
 
 interface MenuItemProps {

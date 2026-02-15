@@ -1,11 +1,20 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { BarChart2, Braces, Copy, FileSpreadsheet, FileText, LayoutDashboard, Package, RefreshCw } from 'lucide-react'
+import BarChart2 from 'lucide-react/dist/esm/icons/bar-chart-2'
+import Braces from 'lucide-react/dist/esm/icons/braces'
+import Copy from 'lucide-react/dist/esm/icons/copy'
+import FileSpreadsheet from 'lucide-react/dist/esm/icons/file-spreadsheet'
+import FileText from 'lucide-react/dist/esm/icons/file-text'
+import LayoutDashboard from 'lucide-react/dist/esm/icons/layout-dashboard'
+import Package from 'lucide-react/dist/esm/icons/package'
+import RefreshCw from 'lucide-react/dist/esm/icons/refresh-cw'
 import { useCallback } from 'react'
 import { isSessionFile, pickedFileToFile, pickFiles } from '@/lib/file-system'
 import { generateTimestampId } from '@/lib/id'
 import { usePipeline } from '@/lib/pipeline'
-import type { ContextMenuState } from '@/stores'
-import { useDialogStore, usePanelStore, usePipelineStore } from '@/stores'
+import { useHydratedNodes } from '@/lib/pipeline/hooks/useHydratedNodes'
+import { useDialogStore } from '@/stores/dialogStore'
+import { type ContextMenuState, usePanelStore } from '@/stores/panelStore'
+import { usePipelineStore } from '@/stores/pipelineStore'
 import type { DashboardNode, ExportConfig, ExportFormat } from '@/types'
 import { isTerminalNode } from '@/types'
 
@@ -27,9 +36,12 @@ const EXPORT_FORMATS: Array<{ format: ExportFormat; label: string; icon: typeof 
 const itemClass = 'menu-item w-full text-left'
 
 export function NodeContextMenu({ menu, onClose, onDelete, onPreview }: NodeContextMenuProps) {
-  const { nodes, getNodeChildren, duplicateBranch, addDashboardNode } = usePipelineStore()
-  const { openChartPanel } = usePanelStore()
-  const { openDialog } = useDialogStore()
+  const nodes = useHydratedNodes()
+  const getNodeChildren = usePipelineStore((s) => s.getNodeChildren)
+  const duplicateBranch = usePipelineStore((s) => s.duplicateBranch)
+  const addDashboardNode = usePipelineStore((s) => s.addDashboardNode)
+  const openChartPanel = usePanelStore((s) => s.openChartPanel)
+  const openDialog = useDialogStore((s) => s.openDialog)
   const { createExport, replaceDataset, setError } = usePipeline()
   const hasChildren = getNodeChildren(menu.nodeId).length > 0
 
@@ -81,16 +93,7 @@ export function NodeContextMenu({ menu, onClose, onDelete, onPreview }: NodeCont
       id: dashboardId,
       type: 'dashboard',
       name: `${sourceNode.name} Dashboard`,
-      tableName: dashboardId, // Not used for DuckDB, just for identification
-      parentIds: [menu.nodeId],
       chartRefs: [],
-      columns: [], // Dashboard doesn't have its own columns
-      rowCount: 0, // Dashboard doesn't have rows
-      position: {
-        x: sourceNode.position.x + 300,
-        y: sourceNode.position.y,
-      },
-      isExpanded: true,
       createdAt: new Date(),
       config: {
         title: `${sourceNode.name} Dashboard`,
@@ -101,7 +104,14 @@ export function NodeContextMenu({ menu, onClose, onDelete, onPreview }: NodeCont
       },
     }
 
-    addDashboardNode(dashboard)
+    const sourcePosition = sourceNode.position ?? { x: 100, y: 100 }
+    addDashboardNode(dashboard, [menu.nodeId], {
+      position: {
+        x: sourcePosition.x + 300,
+        y: sourcePosition.y,
+      },
+      isExpanded: true,
+    })
 
     // Open the dashboard view
     openDialog({ type: 'dashboardView', nodeId: dashboardId })
