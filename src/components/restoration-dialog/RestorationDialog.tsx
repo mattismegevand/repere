@@ -72,6 +72,19 @@ function RestorationDialogInner(props: Props) {
   const parsedNodes = session.nodes
   const parsedEdges = session.edges
 
+  const getParentIds = useCallback(
+    (nodeId: string): string[] => parsedEdges.filter((e) => e.targetId === nodeId).map((e) => e.sourceId),
+    [parsedEdges]
+  )
+
+  const getNodePosition = useCallback(
+    (nodeId: string) => {
+      const node = parsedNodes[nodeId] as { position?: { x: number; y: number } } | undefined
+      return node?.position ?? { x: 0, y: 0 }
+    },
+    [parsedNodes]
+  )
+
   // Check if a node is pending (recursively checks ancestors) - only for partial mode
   const isNodePending = useCallback(
     (nodeId: string, visited: Set<string> = new Set()): boolean => {
@@ -99,14 +112,14 @@ function RestorationDialogInner(props: Props) {
       if (node) {
         if (node.type === 'view') {
           const view = node as DataView
-          for (const parentId of view.parentIds) {
+          for (const parentId of getParentIds(view.id)) {
             if (isNodePending(parentId, visited)) {
               return true
             }
           }
         } else if (node.type === 'chart' || node.type === 'export') {
-          const terminalNode = node as ChartNodeType | ExportNodeType
-          if (isNodePending(terminalNode.parentId, visited)) {
+          const parentId = getParentIds(node.id)[0]
+          if (parentId && isNodePending(parentId, visited)) {
             return true
           }
         }
@@ -114,7 +127,7 @@ function RestorationDialogInner(props: Props) {
 
       return false
     },
-    [isPartialMode, props, parsedNodes]
+    [isPartialMode, props, parsedNodes, getParentIds]
   )
 
   // Get pending ancestor dataset names (recursively)
@@ -145,18 +158,20 @@ function RestorationDialogInner(props: Props) {
       if (node) {
         if (node.type === 'view') {
           const view = node as DataView
-          for (const parentId of view.parentIds) {
+          for (const parentId of getParentIds(view.id)) {
             pendingNames.push(...getPendingAncestorNames(parentId, visited))
           }
         } else if (node.type === 'chart' || node.type === 'export') {
-          const terminalNode = node as ChartNodeType | ExportNodeType
-          pendingNames.push(...getPendingAncestorNames(terminalNode.parentId, visited))
+          const parentId = getParentIds(node.id)[0]
+          if (parentId) {
+            pendingNames.push(...getPendingAncestorNames(parentId, visited))
+          }
         }
       }
 
       return pendingNames
     },
-    [isPartialMode, props, parsedNodes]
+    [isPartialMode, props, parsedNodes, getParentIds]
   )
 
   // Check if a view is pending (waiting for ancestor datasets)
@@ -215,7 +230,7 @@ function RestorationDialogInner(props: Props) {
           return {
             id: node.id,
             type: 'dataset',
-            position: node.position,
+            position: getNodePosition(node.id),
             data: {
               dataset,
               isActive: false,
@@ -236,7 +251,7 @@ function RestorationDialogInner(props: Props) {
           return {
             id: node.id,
             type: 'dataset',
-            position: node.position,
+            position: getNodePosition(node.id),
             data: {
               dataset,
               isActive: false,
@@ -251,13 +266,14 @@ function RestorationDialogInner(props: Props) {
         }
       } else if (node.type === 'view') {
         const view = node as DataView
-        const isPending = isViewPending(view.parentIds)
-        const pendingParentNames = isPending ? getPendingParentNames(view.parentIds) : undefined
+        const parentIds = getParentIds(view.id)
+        const isPending = isViewPending(parentIds)
+        const pendingParentNames = isPending ? getPendingParentNames(parentIds) : undefined
 
         return {
           id: node.id,
           type: 'view',
-          position: node.position,
+          position: getNodePosition(node.id),
           data: {
             view,
             isActive: false,
@@ -272,12 +288,13 @@ function RestorationDialogInner(props: Props) {
         }
       } else if (node.type === 'chart') {
         const chart = node as ChartNodeType
-        const isPending = isViewPending([chart.parentId])
+        const chartParentId = getParentIds(chart.id)[0]
+        const isPending = chartParentId ? isViewPending([chartParentId]) : false
 
         return {
           id: node.id,
           type: 'chart',
-          position: node.position,
+          position: getNodePosition(node.id),
           data: {
             chart,
             isActive: false,
@@ -292,12 +309,13 @@ function RestorationDialogInner(props: Props) {
       } else {
         // export node
         const exportNode = node as ExportNodeType
-        const isPending = isViewPending([exportNode.parentId])
+        const exportParentId = getParentIds(exportNode.id)[0]
+        const isPending = exportParentId ? isViewPending([exportParentId]) : false
 
         return {
           id: node.id,
           type: 'export',
-          position: node.position,
+          position: getNodePosition(node.id),
           data: {
             export: exportNode,
             isActive: false,
@@ -311,7 +329,17 @@ function RestorationDialogInner(props: Props) {
         }
       }
     })
-  }, [parsedNodes, isPartialMode, props, handleFileDrop, handleSkip, isViewPending, getPendingParentNames])
+  }, [
+    parsedNodes,
+    isPartialMode,
+    props,
+    handleFileDrop,
+    handleSkip,
+    isViewPending,
+    getPendingParentNames,
+    getParentIds,
+    getNodePosition,
+  ])
 
   // Convert pipeline edges to React Flow edges
   const flowEdges: Edge[] = useMemo(() => {

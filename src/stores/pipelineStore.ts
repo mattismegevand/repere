@@ -63,7 +63,7 @@ interface PipelineActions {
   // View management
   addView: (view: DataView, parentIds: string[], runtime: NodeRuntime, layout: NodeLayout) => void
   removeView: (id: string) => string[] // Returns removed view IDs for cleanup
-  updateView: (id: string, updates: Partial<DataView> & Partial<NodeRuntime>) => void // Updates view and runtime
+  updateView: (id: string, updates: NodeUpdatePatch) => void // Updates view/runtime/layout/parents
 
   // Chart/Export/Dashboard management (terminal nodes - no DuckDB views)
   addChartNode: (chart: ChartNode, parentId: string, runtime: NodeRuntime, layout: NodeLayout) => void
@@ -83,8 +83,8 @@ interface PipelineActions {
   updateNodePosition: (id: string, position: { x: number; y: number }) => void
   updateNodeName: (id: string, name: string) => void
   updateNodeRowCount: (id: string, rowCount: number) => void
-  updateNode: (id: string, updates: Partial<PipelineNode> & Partial<NodeRuntime> & Partial<NodeLayout>) => void
-  updateNodes: (updates: Record<string, Partial<PipelineNode> & Partial<NodeRuntime> & Partial<NodeLayout>>) => void // Batch update multiple nodes
+  updateNode: (id: string, updates: NodeUpdatePatch) => void
+  updateNodes: (updates: Record<string, NodeUpdatePatch>) => void // Batch update multiple nodes
   toggleNodeExpanded: (id: string) => void
   setNodeParents: (id: string, parentIds: string[]) => void
 
@@ -141,6 +141,13 @@ interface PipelineActions {
   mergeRemoteState: (state: { nodes: Record<string, PipelineNode>; edges: PipelineEdge[] }) => void
 }
 
+type NodeUpdatePatch = Partial<PipelineNode> &
+  Partial<NodeRuntime> &
+  Partial<NodeLayout> & {
+    parentIds?: string[]
+    parentId?: string
+  }
+
 // ============================================
 // INITIAL STATE
 // ============================================
@@ -187,7 +194,7 @@ export const usePipelineStore = create<PipelineState & PipelineActions>()(
     }
 
     const splitNodeUpdates = (
-      updates: Partial<PipelineNode> & Partial<NodeRuntime> & Partial<NodeLayout>
+      updates: NodeUpdatePatch
     ): {
       domainUpdates: Partial<PipelineNode>
       runtimeUpdates: Partial<NodeRuntime>

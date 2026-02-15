@@ -4,8 +4,10 @@ import type { DuckDBClient } from '@/lib/duckdb/interface'
 import { buildSelectQuery } from '@/lib/duckdb/query-builder'
 import { saveFileTauri } from '@/lib/file-system/tauri-file-ops'
 import { normalizeRowDates } from '@/lib/formatters'
+import { getParents } from '@/lib/graph'
 import { isNativeRuntime } from '@/lib/runtime'
-import type { ExportFormat, ExportNode, Filter, PipelineNode, Sort } from '@/types'
+import type { ExportFormat, ExportNode, Filter, PipelineEdge, PipelineNode, Sort } from '@/types'
+import type { NodeRuntime } from '@/types/pipelineRuntime'
 
 interface ExportOptions {
   client: DuckDBClient
@@ -210,10 +212,18 @@ interface ChartExportData {
 interface DownloadAllOptions {
   client: DuckDBClient
   nodes: Record<string, PipelineNode>
+  edges: PipelineEdge[]
+  runtimeById: Record<string, NodeRuntime>
   chartDataUrls: ChartExportData[]
 }
 
-export async function downloadAllAsZip({ client, nodes, chartDataUrls }: DownloadAllOptions): Promise<void> {
+export async function downloadAllAsZip({
+  client,
+  nodes,
+  edges,
+  runtimeById,
+  chartDataUrls,
+}: DownloadAllOptions): Promise<void> {
   const zip = new JSZip()
   const exportFolder = zip.folder('exports')
   const chartFolder = zip.folder('charts')
@@ -227,18 +237,20 @@ export async function downloadAllAsZip({ client, nodes, chartDataUrls }: Downloa
     if (node.type !== 'export') continue
 
     const exportNode = node as ExportNode
-    const parentNode = nodes[exportNode.parentId]
-    if (!parentNode?.tableName) continue
+    const parentId = getParents(exportNode.id, edges)[0]
+    if (!parentId) continue
+    const parentTableName = runtimeById[parentId]?.tableName
+    if (!parentTableName) continue
 
     const filename = exportNode.config.filename || node.name
     const format = exportNode.config.format
 
     try {
       // Get column types for date normalization
-      const columnTypes = await getColumnTypes(client, parentNode.tableName)
+      const columnTypes = await getColumnTypes(client, parentTableName)
 
       if (format === 'csv') {
-        const result = await client.query<Record<string, unknown>>(`SELECT * FROM "${parentNode.tableName}"`)
+        const result = await client.query<Record<string, unknown>>(`SELECT * FROM "${parentTableName}"`)
         if (result.rows.length === 0) continue
 
         const columns = Object.keys(result.rows[0])
@@ -252,7 +264,7 @@ export async function downloadAllAsZip({ client, nodes, chartDataUrls }: Downloa
         exportFolder.file(`${filename}.csv`, csvLines.join('\n'))
       } else if (format === 'parquet') {
         const parquetPath = `/zip_export_${Date.now()}.parquet`
-        await client.execute(`COPY "${parentNode.tableName}" TO '${parquetPath}' (FORMAT PARQUET)`)
+        await client.execute(`COPY "${parentTableName}" TO '${parquetPath}' (FORMAT PARQUET)`)
         if (!client.copyFileToBuffer) {
           console.error('Parquet export not supported in this mode')
           continue
@@ -263,7 +275,7 @@ export async function downloadAllAsZip({ client, nodes, chartDataUrls }: Downloa
           await client.dropFile(parquetPath)
         }
       } else if (format === 'xlsx') {
-        const result = await client.query<Record<string, unknown>>(`SELECT * FROM "${parentNode.tableName}"`)
+        const result = await client.query<Record<string, unknown>>(`SELECT * FROM "${parentTableName}"`)
         if (result.rows.length === 0) continue
 
         const data = result.rows.map((row) => normalizeRowDates(row, columnTypes))
@@ -273,13 +285,13 @@ export async function downloadAllAsZip({ client, nodes, chartDataUrls }: Downloa
         const xlsxBuffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' })
         exportFolder.file(`${filename}.xlsx`, new Uint8Array(xlsxBuffer))
       } else if (format === 'json') {
-        const result = await client.query<Record<string, unknown>>(`SELECT * FROM "${parentNode.tableName}"`)
+        const result = await client.query<Record<string, unknown>>(`SELECT * FROM "${parentTableName}"`)
         if (result.rows.length === 0) continue
 
         const data = result.rows.map((row) => normalizeRowDates(row, columnTypes))
         exportFolder.file(`${filename}.json`, JSON.stringify(data, bigIntReplacer, 2))
       } else if (format === 'jsonl') {
-        const result = await client.query<Record<string, unknown>>(`SELECT * FROM "${parentNode.tableName}"`)
+        const result = await client.query<Record<string, unknown>>(`SELECT * FROM "${parentTableName}"`)
         if (result.rows.length === 0) continue
 
         const lines = result.rows.map((row) => JSON.stringify(normalizeRowDates(row, columnTypes), bigIntReplacer))

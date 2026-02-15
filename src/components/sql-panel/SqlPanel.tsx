@@ -17,6 +17,8 @@ import { useDuckDB } from '@/lib/duckdb'
 import { escapeIdentifier } from '@/lib/duckdb/sql-builder'
 import { createSqlQueryView, dropView, getViewRowCount, getViewSchema } from '@/lib/duckdb/view-manager'
 import { usePanelStore } from '@/stores/panelStore'
+import { usePipelineLayoutStore } from '@/stores/pipelineLayoutStore'
+import { usePipelineRuntimeStore } from '@/stores/pipelineRuntimeStore'
 import { getDescendants, usePipelineStore } from '@/stores/pipelineStore'
 import { useSqlStore } from '@/stores/sqlStore'
 import { useThemeStore } from '@/stores/themeStore'
@@ -39,6 +41,8 @@ export function SqlPanel() {
   const structureStyle = useThemeStore((s) => s.structureStyle)
   const isClassic = structureStyle === 'classic'
   const nodes = usePipelineStore((s) => s.nodes)
+  const runtimeById = usePipelineRuntimeStore((s) => s.nodes)
+  const layoutById = usePipelineLayoutStore((s) => s.nodes)
   const edges = usePipelineStore((s) => s.edges)
   const activeNodeId = usePipelineStore((s) => s.activeNodeId)
   const addView = usePipelineStore((s) => s.addView)
@@ -78,14 +82,17 @@ export function SqlPanel() {
       return op.sql
     }
     if (!activeNode) return ''
+    const activeRuntime = runtimeById[activeNode.id]
     if (activeNode.type === 'dataset') {
-      return `SELECT * FROM ${escapeIdentifier(activeNode.tableName)}`
+      if (!activeRuntime?.tableName) return ''
+      return `SELECT * FROM ${escapeIdentifier(activeRuntime.tableName)}`
     }
     // For views, extract just the SELECT part from CREATE VIEW
-    const viewSql = (activeNode as DataView).viewSql
+    const viewSql = activeRuntime?.viewSql
+    if (!viewSql) return ''
     const selectMatch = viewSql.match(/AS\s+(SELECT[\s\S]+)$/i)
     return selectMatch ? selectMatch[1] : viewSql
-  }, [activeNode, editingNode, isEditing])
+  }, [activeNode, editingNode, isEditing, runtimeById])
 
   // Reset query when panel opens or editing node changes
   useEffect(() => {
@@ -173,15 +180,20 @@ export function SqlPanel() {
     setError(null)
 
     try {
-      const view = await createSqlQueryView(client, query, nodes)
-      addView(view)
+      const result = await createSqlQueryView(client, query, nodes, runtimeById)
+      const defaultPosition = activeNode
+        ? (layoutById[activeNode.id]?.position ?? { x: 100, y: 100 })
+        : { x: 100, y: 100 }
+      addView(result.view, result.parentIds, result.runtime, {
+        position: { x: defaultPosition.x + 300, y: defaultPosition.y },
+      })
       setSqlPanel(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create node')
     } finally {
       setCreating(false)
     }
-  }, [client, query, nodes, addView, setSqlPanel])
+  }, [client, query, nodes, runtimeById, activeNode, layoutById, addView, setSqlPanel])
 
   // Update existing SQL node
   const handleUpdateNode = useCallback(async () => {
@@ -192,17 +204,22 @@ export function SqlPanel() {
 
     try {
       const view = editingNode as DataView
+      const viewRuntime = runtimeById[view.id]
+      const viewTableName = viewRuntime?.tableName
+      if (!viewTableName) {
+        throw new Error('Missing runtime table name for SQL node')
+      }
 
       // Drop the old view and create new one with same name
-      await dropView(client, view.tableName)
+      await dropView(client, viewTableName)
 
       // Create the new view with same ID
-      const createSql = `CREATE VIEW ${escapeIdentifier(view.tableName)} AS ${query}`
+      const createSql = `CREATE VIEW ${escapeIdentifier(viewTableName)} AS ${query}`
       await client.execute(createSql)
 
       // Get updated schema and row count
-      const columns = await getViewSchema(client, view.tableName)
-      const rowCount = await getViewRowCount(client, view.tableName)
+      const columns = await getViewSchema(client, viewTableName)
+      const rowCount = await getViewRowCount(client, viewTableName)
 
       // Extract table names for parent detection
       const referencedTables: string[] = []
@@ -217,7 +234,8 @@ export function SqlPanel() {
       // Find parent nodes
       const parentIds: string[] = []
       for (const node of Object.values(nodes)) {
-        if (referencedTables.includes(node.tableName)) {
+        const tableName = runtimeById[node.id]?.tableName
+        if (tableName && referencedTables.includes(tableName)) {
           parentIds.push(node.id)
         }
       }
@@ -229,13 +247,7 @@ export function SqlPanel() {
       }
 
       // Update the view in store
-      updateView(view.id, {
-        columns,
-        rowCount,
-        parentIds,
-        operation,
-        viewSql: createSql,
-      })
+      usePipelineStore.getState().updateNode(view.id, { operation, parentIds, columns, rowCount, viewSql: createSql })
 
       // Refresh row counts for all descendant views in parallel
       const descendantIds = getDescendants(view.id, edges)
@@ -245,7 +257,9 @@ export function SqlPanel() {
 
       await Promise.all(
         viewDescendants.map(async ({ id, node }) => {
-          const descRowCount = await getViewRowCount(client, node.tableName)
+          const descTableName = runtimeById[node.id]?.tableName
+          if (!descTableName) return
+          const descRowCount = await getViewRowCount(client, descTableName)
           updateView(id, { rowCount: descRowCount })
         })
       )
@@ -256,7 +270,7 @@ export function SqlPanel() {
     } finally {
       setCreating(false)
     }
-  }, [client, query, editingNode, isEditing, nodes, edges, updateView, setSqlPanel])
+  }, [client, query, editingNode, isEditing, nodes, runtimeById, edges, updateView, setSqlPanel])
 
   // Format SQL
   const handleFormat = useCallback(() => {
@@ -289,77 +303,91 @@ export function SqlPanel() {
   }, [])
 
   // Table and column name completion source
-  const sqlCompletion = useCallback((context: CompletionContext): CompletionResult | null => {
-    const nodeList = Object.values(nodesRef.current)
+  const sqlCompletion = useCallback(
+    (context: CompletionContext): CompletionResult | null => {
+      const nodeList = Object.values(nodesRef.current)
 
-    // Check if we're completing after a table name (e.g., "tablename.")
-    const dotMatch = context.matchBefore(/["']?(\w+)["']?\.\w*$/)
-    if (dotMatch) {
-      // Extract table name and find matching node
-      const tableNameMatch = dotMatch.text.match(/["']?(\w+)["']?\./)
-      const tableName = tableNameMatch?.[1]
-      const node = nodeList.find(
-        (n) => n.tableName === tableName || n.tableName.toLowerCase() === tableName?.toLowerCase()
-      )
+      // Check if we're completing after a table name (e.g., "tablename.")
+      const dotMatch = context.matchBefore(/["']?(\w+)["']?\.\w*$/)
+      if (dotMatch) {
+        // Extract table name and find matching node
+        const tableNameMatch = dotMatch.text.match(/["']?(\w+)["']?\./)
+        const tableName = tableNameMatch?.[1]
+        const node = nodeList.find((n) => {
+          const runtime = runtimeById[n.id]
+          return runtime?.tableName === tableName || runtime?.tableName?.toLowerCase() === tableName?.toLowerCase()
+        })
 
-      if (node) {
-        // Complete with columns from this specific table
-        const word = context.matchBefore(/\.\w*$/)
-        if (!word) return null
+        if (node) {
+          const nodeRuntime = runtimeById[node.id]
+          if (!nodeRuntime?.columns) return null
+          // Complete with columns from this specific table
+          const word = context.matchBefore(/\.\w*$/)
+          if (!word) return null
 
-        const options = node.columns.map((col) => ({
-          label: col.name,
-          type: 'property',
-          detail: col.type,
-          apply: escapeIdentifier(col.name),
-        }))
+          const options = nodeRuntime.columns.map((col) => ({
+            label: col.name,
+            type: 'property',
+            detail: col.type,
+            apply: escapeIdentifier(col.name),
+          }))
 
-        return {
-          from: word.from + 1, // +1 to skip the dot
-          options,
-          validFor: /^\w*$/,
+          return {
+            from: word.from + 1, // +1 to skip the dot
+            options,
+            validFor: /^\w*$/,
+          }
         }
       }
-    }
 
-    // Regular completion: tables and all columns
-    const word = context.matchBefore(/\w*/)
-    if (!word || (word.from === word.to && !context.explicit)) return null
+      // Regular completion: tables and all columns
+      const word = context.matchBefore(/\w*/)
+      if (!word || (word.from === word.to && !context.explicit)) return null
 
-    // Table options
-    const tableOptions = nodeList.map((node) => ({
-      label: node.tableName,
-      type: node.type === 'dataset' ? 'class' : 'variable',
-      detail: node.type === 'dataset' ? 'dataset' : 'view',
-      apply: escapeIdentifier(node.tableName),
-      boost: 1, // Prioritize tables
-    }))
+      // Table options
+      const tableOptions = nodeList.flatMap((node) => {
+        const tableName = runtimeById[node.id]?.tableName
+        if (!tableName) return []
+        return [
+          {
+            label: tableName,
+            type: node.type === 'dataset' ? 'class' : 'variable',
+            detail: node.type === 'dataset' ? 'dataset' : 'view',
+            apply: escapeIdentifier(tableName),
+            boost: 1, // Prioritize tables
+          },
+        ]
+      })
 
-    // Column options from all tables
-    const columnOptions = nodeList.flatMap((node) =>
-      node.columns.map((col) => ({
-        label: col.name,
-        type: 'property',
-        detail: `${col.type} (${node.tableName})`,
-        apply: escapeIdentifier(col.name),
-        boost: 0,
-      }))
-    )
+      // Column options from all tables
+      const columnOptions = nodeList.flatMap((node) => {
+        const nodeRuntime = runtimeById[node.id]
+        if (!nodeRuntime?.columns || !nodeRuntime.tableName) return []
+        return nodeRuntime.columns.map((col) => ({
+          label: col.name,
+          type: 'property',
+          detail: `${col.type} (${nodeRuntime.tableName})`,
+          apply: escapeIdentifier(col.name),
+          boost: 0,
+        }))
+      })
 
-    // Deduplicate columns by name (keep first occurrence)
-    const seenColumns = new Set<string>()
-    const uniqueColumnOptions = columnOptions.filter((opt) => {
-      if (seenColumns.has(opt.label)) return false
-      seenColumns.add(opt.label)
-      return true
-    })
+      // Deduplicate columns by name (keep first occurrence)
+      const seenColumns = new Set<string>()
+      const uniqueColumnOptions = columnOptions.filter((opt) => {
+        if (seenColumns.has(opt.label)) return false
+        seenColumns.add(opt.label)
+        return true
+      })
 
-    return {
-      from: word.from,
-      options: [...tableOptions, ...uniqueColumnOptions],
-      validFor: /^\w*$/,
-    }
-  }, [])
+      return {
+        from: word.from,
+        options: [...tableOptions, ...uniqueColumnOptions],
+        validFor: /^\w*$/,
+      }
+    },
+    [runtimeById]
+  )
 
   // Handle drop of table/column names onto editor
   const handleDrop = useCallback((e: React.DragEvent) => {

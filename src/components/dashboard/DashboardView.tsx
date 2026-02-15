@@ -44,6 +44,7 @@ import { useChartData } from '@/lib/duckdb/useChartData'
 import { generateTimestampId } from '@/lib/id'
 import { useDashboardStore } from '@/stores/dashboardStore'
 import { useDialogStore } from '@/stores/dialogStore'
+import { usePipelineRuntimeStore } from '@/stores/pipelineRuntimeStore'
 import { usePipelineStore } from '@/stores/pipelineStore'
 import { usePipelineUiStore } from '@/stores/pipelineUiStore'
 import type {
@@ -65,6 +66,8 @@ export function DashboardView() {
   const closeDialog = useDialogStore((s) => s.closeDialog)
   const openDialog = useDialogStore((s) => s.openDialog)
   const nodes = usePipelineStore((s) => s.nodes)
+  const edges = usePipelineStore((s) => s.edges)
+  const runtimeById = usePipelineRuntimeStore((s) => s.nodes)
   const updateNode = usePipelineStore((s) => s.updateNode)
   const dataVersion = usePipelineUiStore((s) => s.dataVersion)
   const activeFilters = useDashboardStore((s) => s.activeFilters)
@@ -163,8 +166,9 @@ export function DashboardView() {
   const title = config.title || dashboardNode.name
 
   // Get the first parent's columns for the add chart dialog
-  const firstParentId = dashboardNode.parentIds[0]
+  const firstParentId = dashboardNodeId ? edges.find((e) => e.targetId === dashboardNodeId)?.sourceId : undefined
   const firstParent = firstParentId ? nodes[firstParentId] : null
+  const firstParentRuntime = firstParentId ? runtimeById[firstParentId] : undefined
 
   return (
     <Dialog.Root open={isDashboardViewOpen} onOpenChange={(open) => !open && handleClose()}>
@@ -253,8 +257,8 @@ export function DashboardView() {
           {showAddChart && firstParent && (
             <AddChartDialog
               sourceId={firstParentId!}
-              tableName={firstParent.tableName}
-              columns={firstParent.columns}
+              tableName={firstParentRuntime?.tableName ?? ''}
+              columns={firstParentRuntime?.columns ?? []}
               onAdd={handleAddChart}
               onClose={() => setShowAddChart(false)}
             />
@@ -264,8 +268,8 @@ export function DashboardView() {
           {editingChart && firstParent && (
             <EditChartDialog
               chart={editingChart}
-              tableName={firstParent.tableName}
-              columns={firstParent.columns}
+              tableName={firstParentRuntime?.tableName ?? ''}
+              columns={firstParentRuntime?.columns ?? []}
               onSave={handleUpdateChart}
               onClose={() => setEditingChart(null)}
             />
@@ -284,7 +288,7 @@ interface GlobalFilterBarProps {
 
 function GlobalFilterBar({ dashboardId, globalFilters }: GlobalFilterBarProps) {
   const { client } = useDuckDB()
-  const nodes = usePipelineStore((s) => s.nodes)
+  const runtimeById = usePipelineRuntimeStore((s) => s.nodes)
   const activeFilters = useDashboardStore((s) => s.activeFilters)
   const setFilter = useDashboardStore((s) => s.setFilter)
   const removeFilter = useDashboardStore((s) => s.removeFilter)
@@ -329,7 +333,7 @@ function GlobalFilterBar({ dashboardId, globalFilters }: GlobalFilterBarProps) {
               value={currentValue}
               onChange={(value) => handleFilterChange(filter, value)}
               client={client}
-              tableName={nodes[filter.sourceId]?.tableName}
+              tableName={runtimeById[filter.sourceId]?.tableName}
             />
           )
         })}
@@ -844,7 +848,7 @@ function DashboardChart({
   dragListeners,
 }: DashboardChartProps) {
   const { client } = useDuckDB()
-  const nodes = usePipelineStore((s) => s.nodes)
+  const runtimeById = usePipelineRuntimeStore((s) => s.nodes)
   const activeFilters = useDashboardStore((s) => s.activeFilters)
   const drillStates = useDashboardStore((s) => s.drillStates)
   const setFilter = useDashboardStore((s) => s.setFilter)
@@ -873,8 +877,7 @@ function DashboardChart({
   }, [])
 
   // Get the source node for this chart
-  const sourceNode = nodes[chartConfig.sourceId]
-  const tableName = sourceNode?.tableName
+  const tableName = runtimeById[chartConfig.sourceId]?.tableName
 
   // Initialize drill state if chart has hierarchy
   const hasDrillHierarchy = chartConfig.drillHierarchy && chartConfig.drillHierarchy.length > 0

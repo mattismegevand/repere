@@ -1,7 +1,9 @@
 import type { DuckDBClient } from '@/lib/duckdb/interface'
+import { getParents } from '@/lib/graph'
 import type { ColumnStats } from '@/lib/profiling'
 import type { AgentContext, ColumnStat, NodeContext } from '@/types/ai'
-import type { DataView, PipelineNode } from '@/types/pipeline'
+import type { DataView, PipelineEdge, PipelineNode } from '@/types/pipeline'
+import type { NodeRuntime } from '@/types/pipelineRuntime'
 
 /**
  * Maximum number of sample rows to include in context
@@ -79,6 +81,7 @@ function convertColumnStats(stats: ColumnStats[]): ColumnStat[] {
 function buildOperationHistory(
   node: PipelineNode,
   nodes: Record<string, PipelineNode>,
+  edges: PipelineEdge[],
   maxDepth: number = 5
 ): string[] {
   const history: string[] = []
@@ -137,7 +140,7 @@ function buildOperationHistory(
     if (currentNode.type === 'view') {
       history.unshift(describeOperation(currentNode))
       // Traverse to parent
-      const parentId = currentNode.parentIds[0]
+      const parentId = getParents(currentNode.id, edges)[0]
       if (parentId && nodes[parentId]) {
         traverse(nodes[parentId], depth + 1)
       }
@@ -157,19 +160,23 @@ export async function buildAgentContext(
   client: DuckDBClient,
   activeNode: PipelineNode,
   nodes: Record<string, PipelineNode>,
+  runtimeById: Record<string, NodeRuntime>,
+  edges: PipelineEdge[],
   columnStats: ColumnStats[]
 ): Promise<AgentContext> {
+  const activeRuntime = runtimeById[activeNode.id]
+
   // Build current node context
   const currentNode: NodeContext = {
     id: activeNode.id,
     name: activeNode.name,
-    tableName: activeNode.tableName,
-    rowCount: activeNode.rowCount,
-    columns: activeNode.columns,
+    tableName: activeRuntime?.tableName ?? activeNode.id,
+    rowCount: activeRuntime?.rowCount ?? null,
+    columns: activeRuntime?.columns ?? [],
   }
 
   // Fetch sample data
-  const dataSample = await fetchDataSample(client, activeNode.tableName)
+  const dataSample = activeRuntime?.tableName ? await fetchDataSample(client, activeRuntime.tableName) : []
 
   // Build all nodes list with full details
   const allNodes = Object.values(nodes)
@@ -178,12 +185,12 @@ export async function buildAgentContext(
       id: n.id,
       name: n.name,
       type: n.type,
-      columns: n.columns,
-      rowCount: n.rowCount,
+      columns: runtimeById[n.id]?.columns ?? [],
+      rowCount: runtimeById[n.id]?.rowCount ?? null,
     }))
 
   // Build operation history
-  const operationHistory = buildOperationHistory(activeNode, nodes)
+  const operationHistory = buildOperationHistory(activeNode, nodes, edges)
 
   return {
     currentNode,

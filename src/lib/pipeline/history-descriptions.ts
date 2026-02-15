@@ -30,12 +30,12 @@ export function getUndoDescription(undoStack: PipelineSnapshot[], nodes: Record<
     return `Undo: Delete ${view.name}`
   }
 
-  // Check for modified views (same ID but different viewSql)
+  // Check for modified views (same ID but different operation)
   for (const id of currentViewIds) {
     if (snapshotViewIds.has(id)) {
       const current = currentNodes[id] as DataView
       const prev = snapshotNodes[id] as DataView
-      if (current.viewSql !== prev.viewSql) {
+      if (JSON.stringify(current.operation) !== JSON.stringify(prev.operation)) {
         return `Undo: Update ${current.operation.type}`
       }
     }
@@ -78,7 +78,7 @@ export function getRedoDescription(redoStack: PipelineSnapshot[], nodes: Record<
     if (currentViewIds.has(id)) {
       const current = currentNodes[id] as DataView
       const next = snapshotNodes[id] as DataView
-      if (current.viewSql !== next.viewSql) {
+      if (JSON.stringify(current.operation) !== JSON.stringify(next.operation)) {
         return `Redo: Update ${next.operation.type}`
       }
     }

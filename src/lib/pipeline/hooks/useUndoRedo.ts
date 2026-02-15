@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { useCacheManagerOptional } from '@/lib/cache'
 import { getTopologicalOrder } from '@/lib/graph'
+import { usePipelineRuntimeStore } from '@/stores/pipelineRuntimeStore'
 import { usePipelineStore } from '@/stores/pipelineStore'
 import type { PipelineSnapshot } from '@/stores/pipelineTypes'
 import type { DataView } from '@/types'
@@ -46,7 +47,10 @@ export function useUndoRedo() {
 
         const viewsToDrop = Object.values(currentState.nodes)
           .filter((n): n is DataView => n.type === 'view' && !snapshotViewIds.has(n.id))
-          .map((v) => v.tableName)
+          .flatMap((v) => {
+            const tableName = usePipelineRuntimeStore.getState().nodes[v.id]?.tableName
+            return tableName ? [tableName] : []
+          })
 
         const viewsToCreate = Object.values(snapshot.nodes).filter(
           (n): n is DataView => n.type === 'view' && !currentViewIds.has(n.id)
@@ -66,26 +70,12 @@ export function useUndoRedo() {
 
           for (const nodeId of order) {
             if (viewsToCreateSet.has(nodeId)) {
-              const view = snapshot.nodes[nodeId] as DataView
+              const runtime = usePipelineRuntimeStore.getState().nodes[nodeId]
+              if (!runtime?.viewSql) continue
               try {
-                await service.recreateView(view.viewSql)
+                await service.recreateView(runtime.viewSql)
               } catch (err) {
-                console.error(`Failed to recreate view ${view.name}:`, err)
-              }
-            }
-          }
-        }
-
-        // Update views with changed SQL
-        for (const nodeId of snapshotViewIds) {
-          if (currentViewIds.has(nodeId)) {
-            const currentView = currentState.nodes[nodeId] as DataView
-            const snapshotView = snapshot.nodes[nodeId] as DataView
-            if (currentView.viewSql !== snapshotView.viewSql) {
-              try {
-                await service.recreateView(snapshotView.viewSql)
-              } catch (err) {
-                console.error(`Failed to update view ${snapshotView.name}:`, err)
+                console.error(`Failed to recreate view ${snapshot.nodes[nodeId]?.name ?? nodeId}:`, err)
               }
             }
           }

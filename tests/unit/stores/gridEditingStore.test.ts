@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useGridEditingStore } from '@/stores/gridEditingStore'
+import { useGridEditingStore } from '@/components/data-grid/stores/gridEditingStore'
 
 describe('gridEditingStore', () => {
   beforeEach(() => {

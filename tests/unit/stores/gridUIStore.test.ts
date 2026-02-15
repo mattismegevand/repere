@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { useGridUIStore } from '@/stores/gridUIStore'
+import { useGridUIStore } from '@/components/data-grid/stores/gridUIStore'
 
 describe('gridUIStore', () => {
   beforeEach(() => {

@@ -203,10 +203,13 @@ export class PipelineService {
       const node = parsedNodes[nodeId]
 
       if (node.type === 'dataset') {
-        const dataset = node as Dataset
+        const dataset = node as Dataset & NodeRuntime
 
         if (placeholderIds.has(nodeId)) {
-          const columnDefs = dataset.columns
+          if (!dataset.tableName) {
+            throw new Error(`Missing tableName for placeholder dataset ${dataset.id}`)
+          }
+          const columnDefs = (dataset.columns ?? [])
             .map((col) => {
               const colType = col.duckdbType || mapColumnTypeToDuckDB(col.type)
               return `"${col.name}" ${colType}${col.nullable === false ? ' NOT NULL' : ''}`
@@ -214,12 +217,15 @@ export class PipelineService {
             .join(', ')
           await this.client.execute(`CREATE TABLE "${dataset.tableName}" (${columnDefs})`)
           ;(parsedNodes[nodeId] as Dataset).isPlaceholder = true
-          ;(parsedNodes[nodeId] as Dataset).rowCount = 0
+          ;(parsedNodes[nodeId] as Dataset & NodeRuntime).rowCount = 0
           continue
         }
 
         // Check for embedded Parquet file first
         const embeddedFile = embeddedFiles.get(nodeId)
+        if (!dataset.tableName) {
+          throw new Error(`Missing tableName for dataset ${dataset.id}`)
+        }
 
         if (embeddedFile) {
           // Embedded data is stored as Parquet
@@ -259,7 +265,10 @@ export class PipelineService {
         }
       } else if (node.type === 'view') {
         // Only DataView nodes have SQL to execute - chart/export nodes don't create DuckDB views
-        const view = node as DataView
+        const view = node as DataView & NodeRuntime
+        if (!view.viewSql || !view.tableName) {
+          throw new Error(`Missing runtime SQL/tableName for view ${view.id}`)
+        }
         try {
           await this.client.execute(view.viewSql)
           await this.client.query(`SELECT 1 FROM ${view.tableName} LIMIT 0`)
@@ -282,10 +291,12 @@ export class PipelineService {
       await Promise.all(
         viewNodes.map(async ({ nodeId, node }) => {
           try {
-            const rowCount = await this.getViewRowCount(node.tableName)
-            ;(parsedNodes[nodeId] as DataView).rowCount = rowCount
+            const runtimeNode = node as DataView & NodeRuntime
+            if (!runtimeNode.tableName) return
+            const rowCount = await this.getViewRowCount(runtimeNode.tableName)
+            ;(parsedNodes[nodeId] as DataView & NodeRuntime).rowCount = rowCount
           } catch {
-            ;(parsedNodes[nodeId] as DataView).rowCount = 0
+            ;(parsedNodes[nodeId] as DataView & NodeRuntime).rowCount = 0
           }
         })
       )
@@ -295,13 +306,15 @@ export class PipelineService {
   }
 
   async clearAll(nodes: Record<string, PipelineNode>): Promise<void> {
-    const views = Object.values(nodes).filter((n): n is DataView => n.type === 'view')
+    const views = Object.values(nodes).filter((n): n is DataView & NodeRuntime => n.type === 'view')
     for (const view of views) {
+      if (!view.tableName) continue
       await this.client.execute(`DROP VIEW IF EXISTS "${view.tableName}"`)
     }
 
-    const datasets = Object.values(nodes).filter((n): n is Dataset => n.type === 'dataset')
+    const datasets = Object.values(nodes).filter((n): n is Dataset & NodeRuntime => n.type === 'dataset')
     for (const dataset of datasets) {
+      if (!dataset.tableName) continue
       await this.client.execute(`DROP TABLE IF EXISTS "${dataset.tableName}"`)
     }
   }

@@ -1,138 +1,66 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Mock platform detection
-let mockIsTauri = false
-vi.mock('@/lib/platform', () => ({
-  isTauri: () => mockIsTauri,
-}))
+const mockCreateDuckDBClient = vi.fn()
+const mockIsNativeRuntime = vi.fn(() => false)
 
-// Mock the client implementations
-const mockTauriClient = {
-  isReady: vi.fn(() => true),
-  query: vi.fn(),
-}
-
-const mockWasmClient = {
-  isReady: vi.fn(() => true),
-  query: vi.fn(),
-}
-
-// Use a proper class mock for TauriDuckDBClient
-class MockTauriDuckDBClient {
-  isReady = mockTauriClient.isReady
-  query = mockTauriClient.query
-}
-
-vi.mock('@/lib/duckdb/tauri-client', () => ({
-  TauriDuckDBClient: MockTauriDuckDBClient,
-}))
-
-vi.mock('@/lib/duckdb/wasm-client', () => ({
-  WasmDuckDBClient: {
-    create: vi.fn(() => Promise.resolve(mockWasmClient)),
-  },
+vi.mock('@/lib/runtime', () => ({
+  getRuntime: () => ({
+    kind: 'web',
+    isTauri: false,
+    createDuckDBClient: mockCreateDuckDBClient,
+  }),
+  isNativeRuntime: () => mockIsNativeRuntime(),
 }))
 
 import { getDuckDBClient, isNativeBackend, resetDuckDBClient } from '@/lib/duckdb/client-factory'
-import { WasmDuckDBClient } from '@/lib/duckdb/wasm-client'
 
 describe('client-factory', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetDuckDBClient()
-    mockIsTauri = false
+    mockIsNativeRuntime.mockReturnValue(false)
+    mockCreateDuckDBClient.mockResolvedValue({
+      execute: vi.fn(),
+      query: vi.fn(),
+      describe: vi.fn(),
+      count: vi.fn(),
+      close: vi.fn(),
+    })
   })
 
   afterEach(() => {
     resetDuckDBClient()
   })
 
-  describe('getDuckDBClient', () => {
-    it('should return TauriDuckDBClient when running in Tauri', async () => {
-      mockIsTauri = true
+  it('creates and caches a client instance', async () => {
+    const client1 = await getDuckDBClient()
+    const client2 = await getDuckDBClient()
 
-      const client = await getDuckDBClient()
-
-      expect(client).toBeInstanceOf(MockTauriDuckDBClient)
-    })
-
-    it('should return WasmDuckDBClient when running in browser', async () => {
-      mockIsTauri = false
-
-      const client = await getDuckDBClient()
-
-      expect(WasmDuckDBClient.create).toHaveBeenCalled()
-      expect(client).toBe(mockWasmClient)
-    })
-
-    it('should cache and return same instance on subsequent calls', async () => {
-      mockIsTauri = false
-
-      const client1 = await getDuckDBClient()
-      const client2 = await getDuckDBClient()
-
-      expect(client1).toBe(client2)
-      expect(WasmDuckDBClient.create).toHaveBeenCalledTimes(1)
-    })
-
-    it('should cache and return same Tauri instance on subsequent calls', async () => {
-      mockIsTauri = true
-
-      const client1 = await getDuckDBClient()
-      const client2 = await getDuckDBClient()
-
-      expect(client1).toBe(client2)
-      expect(client1).toBeInstanceOf(MockTauriDuckDBClient)
-    })
-
-    it('should handle concurrent initialization calls', async () => {
-      mockIsTauri = false
-
-      // Start multiple initializations concurrently
-      const [client1, client2, client3] = await Promise.all([getDuckDBClient(), getDuckDBClient(), getDuckDBClient()])
-
-      // All should return the same instance
-      expect(client1).toBe(client2)
-      expect(client2).toBe(client3)
-      // Should only create once
-      expect(WasmDuckDBClient.create).toHaveBeenCalledTimes(1)
-    })
+    expect(client1).toBe(client2)
+    expect(mockCreateDuckDBClient).toHaveBeenCalledTimes(1)
   })
 
-  describe('isNativeBackend', () => {
-    it('should return true when in Tauri', () => {
-      mockIsTauri = true
-      expect(isNativeBackend()).toBe(true)
-    })
+  it('deduplicates concurrent initialization', async () => {
+    const [a, b, c] = await Promise.all([getDuckDBClient(), getDuckDBClient(), getDuckDBClient()])
 
-    it('should return false when in browser', () => {
-      mockIsTauri = false
-      expect(isNativeBackend()).toBe(false)
-    })
+    expect(a).toBe(b)
+    expect(b).toBe(c)
+    expect(mockCreateDuckDBClient).toHaveBeenCalledTimes(1)
   })
 
-  describe('resetDuckDBClient', () => {
-    it('should clear cached instance', async () => {
-      mockIsTauri = false
+  it('resets cache and allows re-creation', async () => {
+    await getDuckDBClient()
+    resetDuckDBClient()
+    await getDuckDBClient()
 
-      await getDuckDBClient()
-      resetDuckDBClient()
-      await getDuckDBClient()
+    expect(mockCreateDuckDBClient).toHaveBeenCalledTimes(2)
+  })
 
-      // Create should be called twice since cache was cleared
-      expect(WasmDuckDBClient.create).toHaveBeenCalledTimes(2)
-    })
+  it('proxies isNativeBackend to runtime module', () => {
+    mockIsNativeRuntime.mockReturnValue(true)
+    expect(isNativeBackend()).toBe(true)
 
-    it('should allow switching between client types after reset', async () => {
-      mockIsTauri = false
-      const wasmClient = await getDuckDBClient()
-      expect(wasmClient).toBe(mockWasmClient)
-
-      resetDuckDBClient()
-      mockIsTauri = true
-
-      const tauriClient = await getDuckDBClient()
-      expect(tauriClient).toBeInstanceOf(MockTauriDuckDBClient)
-    })
+    mockIsNativeRuntime.mockReturnValue(false)
+    expect(isNativeBackend()).toBe(false)
   })
 })

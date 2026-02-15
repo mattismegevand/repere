@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react'
 import { computeFileHash, type PickedFile } from '@/lib/file-system'
+import { usePipelineLayoutStore } from '@/stores/pipelineLayoutStore'
 import { usePipelineRuntimeStore } from '@/stores/pipelineRuntimeStore'
 import { usePipelineStore } from '@/stores/pipelineStore'
 import { usePipelineUiStore } from '@/stores/pipelineUiStore'
@@ -61,10 +62,14 @@ export function useDatasets() {
 
         // Get fresh nodes state to handle sequential loads correctly
         const currentNodes = Object.values(usePipelineStore.getState().nodes)
+        const layoutById = usePipelineLayoutStore.getState().nodes
         const position =
           currentNodes.length === 0
             ? { x: 100, y: 100 }
-            : { x: 100, y: Math.max(...currentNodes.map((n) => n.position.y)) + 200 }
+            : {
+                x: 100,
+                y: Math.max(...currentNodes.map((n) => layoutById[n.id]?.position?.y ?? 100)) + 200,
+              }
 
         const dataset: Dataset = {
           id: result.id,
@@ -125,10 +130,14 @@ export function useDatasets() {
 
         // Get fresh nodes state to handle sequential loads correctly
         const currentNodes = Object.values(usePipelineStore.getState().nodes)
+        const layoutById = usePipelineLayoutStore.getState().nodes
         const position =
           currentNodes.length === 0
             ? { x: 100, y: 100 }
-            : { x: 100, y: Math.max(...currentNodes.map((n) => n.position.y)) + 200 }
+            : {
+                x: 100,
+                y: Math.max(...currentNodes.map((n) => layoutById[n.id]?.position?.y ?? 100)) + 200,
+              }
 
         const dataset: Dataset = {
           id: result.id,

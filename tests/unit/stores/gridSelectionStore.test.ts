@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { selectSelectedCol, selectSelectedRow, useGridSelectionStore } from '@/stores/gridSelectionStore'
+import {
+  selectSelectedCol,
+  selectSelectedRow,
+  useGridSelectionStore,
+} from '@/components/data-grid/stores/gridSelectionStore'
 
 describe('gridSelectionStore', () => {
   beforeEach(() => {

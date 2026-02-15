@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { isInternalColumn, useGridColumnStore } from '@/stores/gridColumnStore'
+import { isInternalColumn, useGridColumnStore } from '@/components/data-grid/stores/gridColumnStore'
 
 describe('gridColumnStore', () => {
   beforeEach(() => {

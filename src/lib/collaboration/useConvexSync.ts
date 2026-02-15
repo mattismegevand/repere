@@ -2,6 +2,7 @@ import { api } from 'convex/_generated/api'
 import type { Id } from 'convex/_generated/dataModel'
 import { useMutation, useQuery } from 'convex/react'
 import { useCallback, useEffect, useRef } from 'react'
+import { usePipelineLayoutStore } from '@/stores/pipelineLayoutStore'
 import { usePipelineStore } from '@/stores/pipelineStore'
 import type { PipelineEdge, PipelineNode } from '@/types'
 
@@ -44,11 +45,10 @@ export function useConvexSync(sessionId: Id<'sessions'> | null) {
 
     // Convert remote format to local format
     const nodes: Record<string, PipelineNode> = {}
+    const layoutUpdates: Record<string, { position: { x: number; y: number } }> = {}
     for (const node of remoteNodes) {
-      nodes[node.nodeId] = {
-        ...node.data,
-        position: node.position,
-      }
+      nodes[node.nodeId] = node.data
+      layoutUpdates[node.nodeId] = { position: node.position }
     }
 
     const edges: PipelineEdge[] = remoteEdges.map((e) => ({
@@ -68,6 +68,7 @@ export function useConvexSync(sessionId: Id<'sessions'> | null) {
       // Merge remote changes (remote wins for conflicts)
       store.mergeRemoteState?.({ nodes, edges })
     }
+    usePipelineLayoutStore.getState().setNodesLayout(layoutUpdates)
   }, [sessionId, remoteNodes, remoteEdges])
 
   // Sync local -> remote
@@ -80,7 +81,7 @@ export function useConvexSync(sessionId: Id<'sessions'> | null) {
         nodeId: node.id,
         type: node.type as 'dataset' | 'view' | 'chart' | 'export',
         data: node,
-        position: node.position,
+        position: usePipelineLayoutStore.getState().nodes[node.id]?.position ?? { x: 0, y: 0 },
       })
     },
     [sessionId, upsertNode]

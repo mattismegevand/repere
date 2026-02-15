@@ -11,6 +11,7 @@ import { usePipeline } from '@/lib/pipeline'
 import { clearDraft } from '@/lib/storage/idb'
 import { useDialogStore } from '@/stores/dialogStore'
 import { usePanelStore } from '@/stores/panelStore'
+import { usePipelineRuntimeStore } from '@/stores/pipelineRuntimeStore'
 import { usePipelineStore } from '@/stores/pipelineStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { isTerminalNode } from '@/types'
@@ -29,6 +30,8 @@ export function MenuBar({ onOpenFile, onLoadSession }: MenuBarProps) {
   const { client } = useDuckDB()
   const { activeNode, exportSession, clearAllData } = usePipeline()
   const nodes = usePipelineStore((state) => state.nodes)
+  const edges = usePipelineStore((state) => state.edges)
+  const runtimeById = usePipelineRuntimeStore((state) => state.nodes)
   const numberFormat = useThemeStore((s) => s.numberFormat)
   const setNumberFormat = useThemeStore((s) => s.setNumberFormat)
   const toggleSqlPanel = usePanelStore((s) => s.toggleSqlPanel)
@@ -96,7 +99,7 @@ export function MenuBar({ onOpenFile, onLoadSession }: MenuBarProps) {
     }
 
     try {
-      await downloadAllAsZip({ client, nodes, chartDataUrls })
+      await downloadAllAsZip({ client, nodes, edges, runtimeById, chartDataUrls })
     } catch (err) {
       console.error('Download all failed:', err)
     }

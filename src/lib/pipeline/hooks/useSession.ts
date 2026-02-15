@@ -265,7 +265,7 @@ export function useSession() {
           nodeId: node.id,
           fileName: node.fileName,
           status: isEmbedded ? 'embedded' : 'required',
-          expectedColumns: requiredFile?.expectedColumns ?? node.columns,
+          expectedColumns: requiredFile?.expectedColumns ?? [],
           expectedHash: requiredFile?.fileHash ?? node.fileHash,
         })
       }
@@ -626,9 +626,9 @@ export function useSession() {
         activeNodeId: data.activeNodeId,
         selectedNodeId: data.activeNodeId,
         openNodeIds: data.openNodeIds,
-        loading: false,
-        error: null,
       })
+      usePipelineUiStore.getState().setLoading(false)
+      usePipelineUiStore.getState().setError(null)
     },
     [service]
   )

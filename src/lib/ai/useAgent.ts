@@ -3,6 +3,7 @@ import { useDuckDB } from '@/lib/duckdb'
 import { usePipeline } from '@/lib/pipeline'
 import { profileDataset } from '@/lib/profiling'
 import { useChatStore } from '@/stores/chatStore'
+import { usePipelineRuntimeStore } from '@/stores/pipelineRuntimeStore'
 import { selectActiveNode, usePipelineStore } from '@/stores/pipelineStore'
 import type { ChartConfig, ExportConfig, ViewOperation } from '@/types/pipeline'
 import { Agent, type ExecutionCallbacks } from './agent'
@@ -23,6 +24,8 @@ export function useAgent() {
 
   // Stable getters that read from store directly
   const getNodes = useCallback(() => usePipelineStore.getState().nodes, [])
+  const getRuntimeById = useCallback(() => usePipelineRuntimeStore.getState().nodes, [])
+  const getEdges = useCallback(() => usePipelineStore.getState().edges, [])
   const getActiveNode = useCallback(() => {
     const state = usePipelineStore.getState()
     return state.activeNodeId ? state.nodes[state.activeNodeId] : null
@@ -53,9 +56,10 @@ export function useAgent() {
       try {
         const result = await applyOrReplaceOperation(op, targetNodeId)
         if (result) {
+          const runtime = usePipelineRuntimeStore.getState().nodes[result.id]
           return {
             success: true,
-            message: `Created "${result.name}" with ${result.rowCount ?? 0} rows`,
+            message: `Created "${result.name}" with ${runtime?.rowCount ?? 0} rows`,
             nodeId: result.id,
           }
         }
@@ -156,7 +160,11 @@ export function useAgent() {
 
       try {
         // Get column stats for initial context
-        const columnStats = await profileDataset(client, workingNode.tableName, workingNode.columns)
+        const workingRuntime = getRuntimeById()[workingNode.id]
+        if (!workingRuntime?.tableName || !workingRuntime.columns) {
+          throw new Error('Selected node has no runtime schema yet.')
+        }
+        const columnStats = await profileDataset(client, workingRuntime.tableName, workingRuntime.columns)
 
         // Create callbacks (use workingNode as fallback if no active node)
         const callbacks: ExecutionCallbacks = {
@@ -165,6 +173,8 @@ export function useAgent() {
           createExport: handleCreateExport,
           getActiveNode: () => getActiveNode() ?? workingNode,
           getNodes,
+          getRuntimeById,
+          getEdges,
           onStatus: setStatus,
           onStepComplete: (description, success, message, nodeId) => {
             const step = { description, success, message, nodeId }
@@ -223,6 +233,8 @@ export function useAgent() {
       handleCreateExport,
       getActiveNode,
       getNodes,
+      getRuntimeById,
+      getEdges,
     ]
   )
 

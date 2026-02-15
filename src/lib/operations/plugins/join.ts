@@ -136,6 +136,7 @@ function validate(
     errors.push(`Table with ID "${rightSourceId}" does not exist`)
     return { valid: false, errors, warnings }
   }
+  const rightColumns = ((rightNode as { columns?: Column[] } | undefined)?.columns ?? []) as Column[]
 
   if (joinType !== 'cross') {
     if (!conditions || !Array.isArray(conditions) || conditions.length === 0) {
@@ -145,7 +146,7 @@ function validate(
 
     for (const c of conditions) {
       const leftCol = validateColumn(c.leftColumn, columns, errors)
-      const rightCol = validateColumn(c.rightColumn, rightNode.columns, errors)
+      const rightCol = validateColumn(c.rightColumn, rightColumns, errors)
 
       // Check for type mismatches in join conditions
       if (leftCol && rightCol && !areTypesCompatible(leftCol.type, rightCol.type)) {

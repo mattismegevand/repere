@@ -71,7 +71,8 @@ function validate(
   // Check schema compatibility between current table and union sources
   const currentColumnCount = columns.length
   for (const node of nodesToUnion) {
-    const sourceColumnCount = node.columns.length
+    const sourceColumns = ((node as { columns?: Column[] }).columns ?? []) as Column[]
+    const sourceColumnCount = sourceColumns.length
 
     // Check column count mismatch
     if (sourceColumnCount !== currentColumnCount) {
@@ -83,7 +84,7 @@ function validate(
       // Check column type compatibility
       for (let i = 0; i < currentColumnCount; i++) {
         const currentCol = columns[i]
-        const sourceCol = node.columns[i]
+        const sourceCol = sourceColumns[i]
         if (currentCol && sourceCol) {
           const currentType = currentCol.type.toLowerCase()
           const sourceType = sourceCol.type.toLowerCase()

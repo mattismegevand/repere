@@ -16,6 +16,8 @@ import type {
   PipelineNode,
   PythonNode,
 } from '@/types'
+import type { NodeLayout } from '@/types/pipelineLayout'
+import type { NodeRuntime } from '@/types/pipelineRuntime'
 
 // ============================================
 // TYPES
@@ -188,15 +190,19 @@ export interface SessionData {
 // ============================================
 
 function serializeNode(node: PipelineNode): SerializedNode {
+  const runtime = node as PipelineNode & NodeRuntime
+  const layout = node as PipelineNode & Partial<NodeLayout>
+  const relation = node as PipelineNode & { parentId?: string; parentIds?: string[] }
+
   const base = {
     id: node.id,
     type: node.type,
     name: node.name,
-    tableName: node.tableName,
-    columns: node.columns,
-    rowCount: node.rowCount,
+    tableName: runtime.tableName ?? node.id,
+    columns: runtime.columns ?? [],
+    rowCount: runtime.rowCount ?? null,
     createdAt: node.createdAt.toISOString(),
-    position: node.position,
+    position: layout.position ?? { x: 0, y: 0 },
   }
 
   if (node.type === 'dataset') {
@@ -212,38 +218,39 @@ function serializeNode(node: PipelineNode): SerializedNode {
     return {
       ...base,
       type: 'chart',
-      chartParentId: node.parentId,
+      chartParentId: relation.parentId,
       chartConfig: node.config,
     }
   } else if (node.type === 'export') {
     return {
       ...base,
       type: 'export',
-      exportParentId: node.parentId,
+      exportParentId: relation.parentId,
       exportConfig: node.config,
     }
   } else if (node.type === 'dashboard') {
     return {
       ...base,
       type: 'dashboard',
-      dashboardParentIds: node.parentIds,
+      dashboardParentIds: relation.parentIds,
       dashboardChartRefs: node.chartRefs,
       dashboardConfig: node.config,
     }
   } else if (node.type === 'python') {
+    const pythonRuntime = node as PythonNode & NodeRuntime & { parentId?: string }
     return {
       ...base,
       type: 'python',
-      pythonParentId: node.parentId,
+      pythonParentId: pythonRuntime.parentId,
       pythonCode: node.code,
-      pythonOutputTableName: node.outputTableName,
-      pythonMatplotlibOutput: node.matplotlibOutput,
-      pythonExecutionTimeMs: node.executionTimeMs,
-      pythonLastExecutedAt: node.lastExecutedAt?.toISOString(),
+      pythonOutputTableName: pythonRuntime.outputTableName,
+      pythonMatplotlibOutput: pythonRuntime.matplotlibOutput,
+      pythonExecutionTimeMs: pythonRuntime.executionTimeMs,
+      pythonLastExecutedAt: pythonRuntime.lastExecutedAt?.toISOString(),
     }
   } else {
     // DataView - must be the only remaining type
-    const view = node as DataView
+    const view = node as DataView & { parentIds?: string[] } & NodeRuntime
     return {
       ...base,
       type: 'view',
@@ -365,7 +372,7 @@ export async function serializeSession(
 
     // For datasets, check if we should embed data
     if (node.type === 'dataset') {
-      const dataset = node as Dataset
+      const dataset = node as Dataset & NodeRuntime
 
       // Determine if this dataset should be embedded
       let shouldEmbed = false
@@ -379,6 +386,7 @@ export async function serializeSession(
 
       if (shouldEmbed) {
         // Export to Parquet and add to ZIP
+        if (!dataset.tableName) continue
         const parquetData = await exportTableToParquet(client, dataset.tableName)
         zip.file(`data/${dataset.id}.parquet`, parquetData)
         embeddedDatasets.push(dataset.id)
@@ -389,7 +397,7 @@ export async function serializeSession(
           fileName: dataset.fileName,
           fileSize: dataset.fileSize,
           fileHash: dataset.fileHash,
-          expectedColumns: dataset.columns,
+          expectedColumns: dataset.columns ?? [],
         })
       }
     }

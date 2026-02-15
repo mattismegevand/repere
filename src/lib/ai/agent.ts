@@ -2,7 +2,8 @@ import type { DuckDBClient } from '@/lib/duckdb/interface'
 import { validateToolCall } from '@/lib/operations'
 import type { ColumnStats } from '@/lib/profiling'
 import type { AgentPlan, ChatMessage, LLMMessage, LLMToolCall, PlannedStep, StepOperation } from '@/types/ai'
-import type { ChartConfig, ExportConfig, PipelineNode, ViewOperation } from '@/types/pipeline'
+import type { ChartConfig, ExportConfig, PipelineEdge, PipelineNode, ViewOperation } from '@/types/pipeline'
+import type { NodeRuntime } from '@/types/pipelineRuntime'
 import { buildAgentContext, serializeContextForPrompt } from './context'
 import { formatValidationError } from './error-formatter'
 import { createAssistantMessage, createToolResultMessage, LLMClient } from './llm-client'
@@ -36,6 +37,10 @@ export interface ExecutionCallbacks {
   getActiveNode: () => PipelineNode | null
   // Get all nodes
   getNodes: () => Record<string, PipelineNode>
+  // Get node runtime data
+  getRuntimeById: () => Record<string, NodeRuntime>
+  // Get pipeline edges
+  getEdges: () => PipelineEdge[]
   // Report status to UI
   onStatus: (message: string) => void
   // Report when a step completes (nodeId is the affected node for navigation)
@@ -164,7 +169,7 @@ export class Agent {
     callbacks: ExecutionCallbacks,
     chatHistory: ChatMessage[] = []
   ): Promise<{ success: boolean; message: string }> {
-    const { onStatus, onStepComplete, isAborted, getActiveNode, getNodes } = callbacks
+    const { onStatus, onStepComplete, isAborted, getActiveNode, getNodes, getRuntimeById, getEdges } = callbacks
 
     // Build initial context
     const activeNode = getActiveNode()
@@ -172,7 +177,7 @@ export class Agent {
       return { success: false, message: 'No active node selected' }
     }
 
-    const context = await buildAgentContext(client, activeNode, getNodes(), columnStats)
+    const context = await buildAgentContext(client, activeNode, getNodes(), getRuntimeById(), getEdges(), columnStats)
     const contextString = serializeContextForPrompt(context)
 
     // Build chat history summary (exclude the current message which is already in goal)
@@ -237,7 +242,7 @@ export class Agent {
           // Pre-validate view operations before execution
           if (stepOp.kind === 'view') {
             const targetNode = stepOp.targetNodeId ? getNodes()[stepOp.targetNodeId] : getActiveNode()
-            const columns = targetNode?.columns ?? []
+            const columns = targetNode ? (getRuntimeById()[targetNode.id]?.columns ?? []) : []
 
             const validation = validateToolCall(toolCall.name, toolCall.arguments, columns, getNodes())
 
@@ -290,7 +295,14 @@ export class Agent {
             completedSteps.length > 0 ? `## Progress So Far\n${completedSteps.join('\n')}\n\n` : ''
 
           // Rebuild full context with refresh tier (includes updated schema and sample data)
-          const refreshedContext = await buildAgentContext(client, newActiveNode, getNodes(), columnStats)
+          const refreshedContext = await buildAgentContext(
+            client,
+            newActiveNode,
+            getNodes(),
+            getRuntimeById(),
+            getEdges(),
+            columnStats
+          )
           const refreshedContextString = serializeContextForPrompt(refreshedContext, { tier: 'refresh' })
 
           messages.push({
@@ -318,14 +330,16 @@ export class Agent {
     client: DuckDBClient,
     columnStats: ColumnStats[],
     getActiveNode: () => PipelineNode | null,
-    getNodes: () => Record<string, PipelineNode>
+    getNodes: () => Record<string, PipelineNode>,
+    getRuntimeById: () => Record<string, NodeRuntime>,
+    getEdges: () => PipelineEdge[]
   ): Promise<{ success: boolean; plan?: AgentPlan; error?: string }> {
     const activeNode = getActiveNode()
     if (!activeNode) {
       return { success: false, error: 'No active node selected' }
     }
 
-    const context = await buildAgentContext(client, activeNode, getNodes(), columnStats)
+    const context = await buildAgentContext(client, activeNode, getNodes(), getRuntimeById(), getEdges(), columnStats)
     const contextString = serializeContextForPrompt(context)
 
     const messages: LLMMessage[] = [
