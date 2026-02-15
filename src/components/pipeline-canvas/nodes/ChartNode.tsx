@@ -14,7 +14,7 @@ import LineChart from 'lucide-react/dist/esm/icons/line-chart'
 import Pencil from 'lucide-react/dist/esm/icons/pencil'
 import PieIcon from 'lucide-react/dist/esm/icons/pie-chart'
 import ScatterChart from 'lucide-react/dist/esm/icons/scatter-chart'
-import TreesIcon from 'lucide-react/dist/esm/icons/trees-icon'
+import TreesIcon from 'lucide-react/dist/esm/icons/trees'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import {
   BarChart,
